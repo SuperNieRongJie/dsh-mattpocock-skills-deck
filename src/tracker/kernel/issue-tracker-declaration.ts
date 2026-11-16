@@ -12,7 +12,7 @@
 //  - 契约 §2 capability-by-fill：解析只产「有/无」二分，不产能力表。
 //
 // 修复 #277（标题优先 + markdown 仅看标题行）：
-//  - 标题三者先互斥按 gitlab > markdown > github 收敛并以 high 返回，彻底阻断正文 markdown/.scratch 抢先
+//  - 标题先互斥按 gitee > gitlab > markdown > github 收敛并以 high 返回，彻底阻断正文 markdown/.scratch 抢先
 //  - 正文关键词仅 low 兜底，且 markdown 正文不参与判定（正文含 markdown/.scratch 不再误切 markdown）
 //  - 旧文档无标题时仍可由 gitlab/github 正文兜底；markdown 无标题旧文档由 matches 阶段经 .scratch 目录探测（非 explicit）
 //
@@ -41,9 +41,14 @@ export function parseIssueTracker(raw: unknown): ParsedIssueTracker {
   // 显式标题形态 `# Issue tracker: GitHub` 为 high 置信 — 仅标题行参与 high 判定
   const titleGithub = /^#\s*issue\s*tracker\s*:\s*github/im.test(text)
   const titleGitlab = /^#\s*issue\s*tracker\s*:\s*gitlab/im.test(text)
+  const titleGitee = /^#\s*issue\s*tracker\s*:\s*gitee/im.test(text)
   const titleMarkdown = /^#\s*issue\s*tracker\s*:\s*(markdown|local)/im.test(text)
 
-  // ── 第一阶段：标题优先（高置信），优先级 gitlab > markdown > github ──
+  // ── 第一阶段：标题优先（高置信），优先级 gitee > gitlab > markdown > github ──
+  // Gitee 排在 GitLab 前面：两个平台名长得像，同一份文件里若同时出现两行标题，认更具体的那个。
+  if (titleGitee) {
+    return { explicitBackendId: 'gitee', rawHint: 'gitee', confidence: 'high', reason: 'title-gitee' }
+  }
   if (titleGitlab) {
     return { explicitBackendId: 'gitlab', rawHint: 'gitlab', confidence: 'high', reason: 'title-gitlab' }
   }
@@ -58,6 +63,10 @@ export function parseIssueTracker(raw: unknown): ParsedIssueTracker {
   // ── 第二阶段：标题均未命中时，正文关键词 low 兜底 ──
   // markdown 正文关键词已按 #277 建议彻底忽略（仅看标题行），避免 "# Issue tracker: GitHub" + 正文 markdown/.scratch 误判；
   // markdown 旧文档无标题时由 matches 阶段经 .scratch 目录探测，无需 explicit 低兜底。
+  const hasGitee = /gitee/i.test(text)
+  if (hasGitee) {
+    return { explicitBackendId: 'gitee', rawHint: 'gitee', confidence: 'low', reason: 'keyword-gitee' }
+  }
   const hasGitlab = /gitlab/i.test(text)
   if (hasGitlab) {
     return { explicitBackendId: 'gitlab', rawHint: 'gitlab', confidence: 'low', reason: 'keyword-gitlab' }
