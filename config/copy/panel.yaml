@@ -105,6 +105,13 @@ zh:
 
     本次已选后端：GitLab — 请按 GitLab 模板生成 docs/agents/issue-tracker.md
   setup.gitlab.labelReqs: ，并确保仓库中技能所需标签齐全（triage 五角色 + wayfinder 标签 wayfinder:map / research / prototype / grilling / task），不要只建少数几个
+  setup.gitee.trackerLine: 本仓库为 Gitee → 提议 Gitee Issues
+  setup.gitee.trackerChoice: Gitee Issues
+  setup.gitee.backendNote: |-
+    
+
+    本次已选后端：Gitee。生成 docs/agents/issue-tracker.md 时，第一行固定写「# Issue tracker: Gitee」，正文按下面这些事实写清：所有操作都走 gitee CLI（npm 包 @gitee/gitee-cli）的 `gitee api <路径>`，路径从 /repos/ 写起、不要再加一段 /v5；票号是 I8A2BC 这样的字符串，不是数字；建票与改票挂在所有者一级（POST /repos/owner/issues 与 PATCH /repos/owner/issues/number，owner 是仓库所有者、number 是票号），仓库名放在请求正文里；标签在票上是一个逗号分隔的字符串；Gitee 的票状态有 open、progressing、closed、rejected 四种，只有 closed 算关闭；Gitee 没有阻塞端点，阻塞关系写成正文最上面一行 Blocked by 加票号；子票用数字 parent_id 挂到父票上，先读父票拿到它的 id。
+  setup.gitee.labelReqs: ，并确保仓库中技能所需标签齐全（triage 五角色 + wayfinder 标签 wayfinder:map / research / prototype / grilling / task），不要只建少数几个
   setup.default.trackerLine: 本仓库为 GitHub → 提议 GitHub Issues
   setup.default.trackerChoice: GitHub Issues
   setup.default.backendNote: |-
@@ -486,6 +493,13 @@ en:
 
     Selected backend: GitLab — please generate docs/agents/issue-tracker.md from the GitLab template.
   setup.gitlab.labelReqs: ", and ensure the repo has the complete label set the skills need (the five triage-role labels + the wayfinder labels wayfinder:map / research / prototype / grilling / task) — not just a few"
+  setup.gitee.trackerLine: this repo is on Gitee → propose Gitee Issues
+  setup.gitee.trackerChoice: Gitee Issues
+  setup.gitee.backendNote: |-
+    
+
+    Selected backend: Gitee. When generating docs/agents/issue-tracker.md, start with the line "# Issue tracker: Gitee", and record these facts in the body: every operation goes through the gitee CLI (npm package @gitee/gitee-cli) as `gitee api <path>`, with paths starting at /repos/ and never repeating /v5; an issue number is a string such as I8A2BC, not an integer; creating and updating issues happen at the owner level (POST /repos/owner/issues and PATCH /repos/owner/issues/number, where owner is the account and number the issue string) with the repo name in the request body; labels are one comma-separated string on the issue; Gitee's states are open, progressing, closed and rejected, and only closed counts as closed; Gitee has no blocking endpoint, so a blocked-by edge is a "Blocked by" line naming the issue numbers at the top of the body; a child issue is attached to its parent through the numeric parent_id, read from the parent issue first.
+  setup.gitee.labelReqs: ", and ensure the repo has the complete label set the skills need (the five triage-role labels + the wayfinder labels wayfinder:map / research / prototype / grilling / task) — not just a few"
   setup.default.trackerLine: this repo is on GitHub → propose GitHub Issues
   setup.default.trackerChoice: GitHub Issues
   setup.default.backendNote: |-
