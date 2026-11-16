@@ -323,10 +323,10 @@ async function main(): Promise<void> {
       JSON.stringify({ outlet: r4b.backendId, state: r4b.state, gap: r4b.gap ? r4b.gap.id : null }))
   }
 
-  title('D 多命中按明文顺序裁剪（GitHub > Markdown > GitLab）')
+  title('D 多命中按明文顺序裁剪（GitHub > Markdown > GitLab > Gitee）')
   {
-    ok(JSON.stringify(MULTI_CLAIM_ORDER) === JSON.stringify(['github', 'markdown', 'gitlab']),
-      '明文顺序常量就是 GitHub > Markdown > GitLab', JSON.stringify(MULTI_CLAIM_ORDER))
+    ok(JSON.stringify(MULTI_CLAIM_ORDER) === JSON.stringify(['github', 'markdown', 'gitlab', 'gitee']),
+      '明文顺序常量就是 GitHub > Markdown > GitLab > Gitee', JSON.stringify(MULTI_CLAIM_ORDER))
     ok(JSON.stringify(orderClaims(['gitlab', 'markdown', 'github'])) === JSON.stringify(['github', 'markdown', 'gitlab']),
       '倒着给的名单按明文顺序排好')
     ok(JSON.stringify(orderClaims(['gitlab', 'scratch', 'github'])) === JSON.stringify(['github', 'gitlab', 'scratch']),
@@ -347,8 +347,8 @@ async function main(): Promise<void> {
     // 不是看 import 文本出现的位置——两件事今天碰巧同序，改起来却可以不一致（#1048 复核指出上一版只看了位置）。
     const assembly = readAssembly()
     const order = registerOrderOf(assembly)
-    ok(JSON.stringify(order) === JSON.stringify(['github', 'markdown', 'gitlab']),
-      '装配处三个后端是按 github → markdown → gitlab 注册的（读真的注册调用）', JSON.stringify(order))
+    ok(JSON.stringify(order) === JSON.stringify(['github', 'markdown', 'gitlab', 'gitee']),
+      '装配处四个后端是按 github → markdown → gitlab → gitee 注册的（读真的注册调用）', JSON.stringify(order))
     ok(JSON.stringify(order) === JSON.stringify(MULTI_CLAIM_ORDER),
       '装配顺序与明文裁剪顺序逐位一致：改一处就得同时改另一处',
       JSON.stringify({ 装配: order, 明文: MULTI_CLAIM_ORDER }))

@@ -77,6 +77,17 @@ timeouts:
   # GitLab 房建仓那一步的超时：60 秒。建仓含远端建仓库与本地初始化两段。
   gitlabCreateProjectMs: 60000
 
+  # Gitee 房常规读超时：8 秒。列票、读票、标签、评论等单次查询共用这一档。
+  giteeReadMs: 8000
+  # Gitee 房慢读超时：10 秒。计数与子票枚举要连翻多页，走这一档。
+  giteeSlowReadMs: 10000
+  # Gitee 房探活与轻查询超时：15 秒（与 GitHub / GitLab 两房探活对齐）。
+  giteeProbeMs: 15000
+  # Gitee 房 git 回退链超时：5 秒（问远端地址这类兜底，三档里最短）。
+  giteeFallbackMs: 5000
+  # Gitee 房建仓那一步的超时：60 秒。含远端建仓库与本地 git 初始化、提交、推送。
+  giteeCreateRepoMs: 60000
+
   # —— 宿主直调的 git 命令与凭据助手（2026-10-16 全量收拢补）——
   # 单条 git 命令的默认超时：20 秒。接线显式给了超时就按接线那个（versionControl.js 的 TIMEOUT_MS）。
   vcRunTimeoutMs: 20000

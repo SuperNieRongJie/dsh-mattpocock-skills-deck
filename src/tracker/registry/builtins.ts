@@ -19,17 +19,20 @@
 import type { BackendModule } from '../contract/backend-module.js'
 
 /** 内置房间的编号。房间名是数据：依赖规则的起点判据不写房名，房间清单只有这里一处。 */
-export type BuiltinRoomId = 'github' | 'gitlab' | 'markdown'
+export type BuiltinRoomId = 'gitee' | 'github' | 'gitlab' | 'markdown'
 
 /**
- * 内置房间的名单与注册顺序：github → markdown → gitlab。
+ * 内置房间的名单与注册顺序：github → markdown → gitlab → gitee。
+ *
+ * Gitee 排在末尾：它最后加进来，排在原有三间之后不改变任何既有组合的注册序，
+ * 判定层的明文裁剪顺序因此只需在末尾追加同一间房。
  *
  * 顺序有意义：注册表按注册序仲裁平局，而这个顺序必须与判定层那份明文裁剪顺序
- * （src/tracker/detection/backendDecision.ts 的 MULTI_CLAIM_ORDER，同样是 github → markdown → gitlab）
+ * （src/tracker/detection/backendDecision.ts 的 MULTI_CLAIM_ORDER，同样是 github → markdown → gitlab → gitee）
  * 逐位一致 —— 两处不一致时，同一组多命中会得出两种结论。门禁 tests/verify-detection-evidence.ts
  * 的 D 节读的就是这里，改名单就得同时看那两处。
  */
-export const BUILTIN_ROOM_IDS: readonly BuiltinRoomId[] = ['github', 'markdown', 'gitlab']
+export const BUILTIN_ROOM_IDS: readonly BuiltinRoomId[] = ['github', 'markdown', 'gitlab', 'gitee']
 
 /**
  * 挑出注册表要的那一份模块对象。
@@ -55,6 +58,10 @@ async function backendModuleOf(id: BuiltinRoomId): Promise<BackendModule> {
   if (id === 'gitlab') {
     const ns = await import('../rooms/gitlab/index.js')
     return ns.gitlabBackend
+  }
+  if (id === 'gitee') {
+    const ns = await import('../rooms/gitee/index.js')
+    return ns.giteeBackend
   }
   const ns = await import('../rooms/markdown/index.js')
   return ns.markdownModule
@@ -144,4 +151,5 @@ export async function loadMarkdownHostExtras(): Promise<MarkdownHostExtras> {
 // 所以形状经装配点转出 —— 全仓允许 import 房间的地方只有本文件一处，别处的取用一律走这里。
 export type { GithubBackendMembers, GithubBackendShape, createGithubBackend } from '../rooms/github/room/backend.js'
 export type { GitlabBackendMembers, GitlabBackendShape, createGitlabBackend } from '../rooms/gitlab/index.js'
+export type { GiteeBackendMembers, GiteeBackendShape, createGiteeBackend } from '../rooms/gitee/index.js'
 export type { MarkdownBackendMembers, MarkdownBackendShape, createMarkdownBackend } from '../rooms/markdown/index.js'
