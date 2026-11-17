@@ -62,7 +62,7 @@ export const makeStore = (): any => ({
   //   面板每次换档写回同一处，下次启动沿用。
   stateFilter: ((typeof listPrefs !== 'undefined' ? listPrefs : {}) as any).stateFilter, sortKey: ((typeof listPrefs !== 'undefined' ? listPrefs : {}) as any).sortKey, sortDir: ((typeof listPrefs !== 'undefined' ? listPrefs : {}) as any).sortDir,
   chainSnapshot: null, chainLoadedAt: '', backendChain: null, fullChain: null,
-  snapMode: 'loading', snapError: null, snapLoading: false,
+  snapMode: 'loading', snapError: null, snapErrorRaw: '', snapLoading: false,
   // #727 / #1767：后端那条事实的读取状态。selPending 只有一个主人——那条问后端的专用电话还在飞时
   //   由 askSelectionOnce 自己置、自己清（见 probe-scope-selection）；快照取数在飞由 snapLoading 表达，
   //   两个开关各管一件事。_selAskedKey = 已经为哪个工作区补问过那条电话（同一工作区只问一次）。

@@ -443,6 +443,12 @@ export     const ListTab = ({ st, narrow }: any) => {
           listSkeletonNode(h, 8),
         ]) : null,
         (st.snapMode === 'err' && !st.snapshot && !getCachedSnapshot(st.cwd)) ? h('div', { style: { color: '#f87171', fontSize: 12, padding: '14px 0', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 } }, [Ic({ n: 'alert', size: 12 }), h('span', null, tr('list.errFull', { err: st.snapError }))]) : null,
+        // 失败原文折叠块：上面那句是插件归好类的一句话，人自己判断还得看后端或命令吐的原文。
+        //   没有原文时给一句说明而不是空折叠条（点了什么也看不到，比不点更糊涂）。
+        (st.snapMode === 'err' && !st.snapshot && !getCachedSnapshot(st.cwd)) ? h('details', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary,#a1a1aa)', padding: '0 2px 8px', maxWidth: '100%' } }, [
+          h('summary', { style: { cursor: 'pointer' } }, tr('list.errRaw')),
+          st.snapErrorRaw ? h('pre', { style: { whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '6px 0 0', padding: 8, borderRadius: 6, background: 'rgba(127,127,127,0.12)', maxHeight: 220, overflow: 'auto', fontSize: 11, lineHeight: 1.5 } }, String(st.snapErrorRaw)) : h('div', { style: { margin: '6px 0 0' } }, tr('list.errRawMissing')),
+        ]) : null,
         // #715（诚实显示）：这一行说清「这份数据多新、上次刷新成不成、现在是不是降级」。取数时刻取快照的 generatedMs（不是渲染时刻）；判据与词条见 views/shared/truthLines.js，没有事实的那句不画（不替宿主编事实）。
         (function () {
           // 2026-09-22 维护者定：「上次更新」那一条搬去面板头部第一行右侧那个小时间标签（panel/Dock.js），这一行从此只说其余那些状态句（刷新失败 / 已暂停 / 落后 / 已推后 / 未在刷新…），同一条信息不再出现两次。

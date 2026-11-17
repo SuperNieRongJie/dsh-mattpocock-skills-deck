@@ -126,6 +126,8 @@ export const probeNow = function (fromFocus: any, runtimeOpts?: any): void {
         const changed: boolean = (st.snapMode !== 'err') || (st.snapError !== text);
         st.snapMode = 'err';
         st.snapError = text;
+        // 这一档失败没有后端原文（探针自己没跑通），清掉上一次留下的原文，别让旧原文配新错误。
+        st.snapErrorRaw = '';
         st.snapFail = { kind: 'probe-failed', at: Date.now() };
         st.snapLoading = false;
         if (changed) { try { emit(st); } catch (eEmit) {} }

@@ -218,7 +218,7 @@ export function createSessionSnapshot(deps: SnapshotDeps) {
           // #1446：额度读数口接上了才传；#1439 A2：会话口接上了就经会话取数（没接的两种口 composer 各自保持老形状）。
           const composer: Composer = createSnapshotComposer(reg, Object.assign({ snapshotTtl: SNAPSHOT_TTL_MS, logCtx: logCtx || undefined }, typeof budgetReadout === 'function' ? { budgetReadout: budgetReadout } : null, typeof openSession === 'function' ? { openSession: openSession } : null))
           const res: Composed = (!isForce && first && first.replay) ? { ok: true, snapshot: first.replay.snapshot } : await composer.composeSnapshot(backendId, repoRef, ctx2, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: !!(args && args.force), previousSnapshot: (first && first.replay) ? first.replay.snapshot : null, onRows: first ? first.writeRows : undefined })
-          if (!res.ok) { const _e1: Error & { fail?: unknown } = new Error((res.error && res.error.message) || 'composeSnapshot failed'); if (res.fail) _e1.fail = res.fail; throw _e1 }
+          if (!res.ok) { const _e1: Error & { fail?: unknown; raw?: string } = new Error((res.error && res.error.message) || 'composeSnapshot failed'); if (res.fail) _e1.fail = res.fail; _e1.raw = (res.error && (res.error as unknown as { raw?: string }).raw) || ''; throw _e1 }
           // #1869：首屏取回来的行先收在内存里，等编排器成功返回后整批一个事务写库；
           // 进程在这之前被杀，库仍是上一轮完整数据（不会留下半批）。
           // #1893：取回来的行整批写库，行数进回包（在线重建的进度）。
@@ -398,7 +398,7 @@ export function createSessionSnapshot(deps: SnapshotDeps) {
         // #1446：回退路径也把额度读数带上；#1439 A2：会话口同主路径（见上方的 composer）。
         const composer2: Composer = createComposer2(reg2, Object.assign({ snapshotTtl: SNAPSHOT_TTL_MS, logCtx: logCtx || undefined }, typeof budgetReadout === 'function' ? { budgetReadout: budgetReadout } : null, typeof openSession === 'function' ? { openSession: openSession } : null))
         const res2: Composed = (!isForce && first && first.replay) ? { ok: true, snapshot: first.replay.snapshot } : await composer2.composeSnapshot(backendId2, repoRef2, ctx2b, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: !!(args && args.force), previousSnapshot: (first && first.replay) ? first.replay.snapshot : null, onRows: first ? first.writeRows : undefined })
-        if (!res2.ok) { const _e2: Error & { fail?: unknown } = new Error((res2.error && res2.error.message) || 'composeSnapshot failed'); if (res2.fail) _e2.fail = res2.fail; throw _e2 }
+        if (!res2.ok) { const _e2: Error & { fail?: unknown; raw?: string } = new Error((res2.error && res2.error.message) || 'composeSnapshot failed'); if (res2.fail) _e2.fail = res2.fail; _e2.raw = (res2.error && (res2.error as unknown as { raw?: string }).raw) || ''; throw _e2 }
         // #1893：同 composer 支路，取回来的行整批写库（编排器成功之后），行数进回包。
         const fetchedRows2 = await commitFetchRows(first); const inner2 = upcaseSnapStates(res2.snapshot)
         // #1887：与 composer 支路同一口径：写库之后再读一次六个数字，挂到 deck 上。
@@ -476,7 +476,7 @@ export function createSessionSnapshot(deps: SnapshotDeps) {
       } catch (e) {
         // #1893：内存副本已删，失败不再需要「把缓存标脏」；失败本身照旧把种类一起回给界面（#715）：
         // 配额被别人耗尽 / 插件自己的取数失败 = 两句不同的话；没带种类的一律按后者说，拿不准时不许说「等整点恢复」。
-        return { ok: false, error: errText(e), failKind: ((e as any) && (e as any).fail && (e as any).fail.kind) ? (e as any).fail.kind : 'fetch-failed', env: { ghError: getGhLastError() } }
+        return { ok: false, error: errText(e), raw: ((e as any) && typeof (e as any).raw === 'string') ? (e as any).raw : '', failKind: ((e as any) && (e as any).fail && (e as any).fail.kind) ? (e as any).fail.kind : 'fetch-failed', env: { ghError: getGhLastError() } }
       }
       })()
       const _entry = _sharedInflight.snapshotInflightPark(snapshotDedupKey, isForce, snapshotPending); try { return await snapshotPending } finally { _sharedInflight.snapshotInflightLeave(snapshotDedupKey, _entry) }

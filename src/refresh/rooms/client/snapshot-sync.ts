@@ -177,6 +177,7 @@ export const loadSnapshot = function (st: any, force: any, silent: any, why: any
     if (typeof host === 'undefined' || typeof host.call !== 'function') {
       st.snapMode = 'err';
       st.snapError = tr('err.hostUnavailable');
+      st.snapErrorRaw = '';
       emit(st);
       return Promise.resolve();
     }
@@ -286,6 +287,9 @@ export const loadSnapshot = function (st: any, force: any, silent: any, why: any
       } else {
         st.snapMode = 'err';
         st.snapError = (snap && snap.error) ? String(snap.error).slice(0, 160) : tr('err.snapshotEmpty');
+        // 失败原文（后端或命令自己吐的那几句）不截断地收下：界面上「展开原文」要真的能展开，
+        //   一句话的 snapError 只够说清是哪一档失败，人自己判断还得看原文。
+        st.snapErrorRaw = (snap && typeof snap.raw === 'string' && snap.raw) ? String(snap.raw) : '';
         // #715：这次取数失败，把「是哪一种失败」一起收下 —— 判据由宿主看真实读数分好类
         //   （wf.snapshot 回包的 failKind：配额被别人耗尽 / 插件自己的取数失败），界面只翻成两句不同的话。
         st.snapFail = { kind: (snap && snap.failKind === 'quota-exhausted') ? 'quota-exhausted' : 'fetch-failed', at: Date.now() };
@@ -316,6 +320,7 @@ export const loadSnapshot = function (st: any, force: any, silent: any, why: any
       try { if (typeof _flushDeferredChain === 'function') _flushDeferredChain(st); } catch (eFlushSnapFail) {}
       st.snapMode = 'err';
       st.snapError = String((e && e.message) || e).slice(0, 160);
+      st.snapErrorRaw = (e && typeof e.raw === 'string' && e.raw) ? String(e.raw) : '';
       if (force && !silent) flash(st, tr('toast.snapFail', { err: st.snapError }), 'warn');
       emit(st);
     });
