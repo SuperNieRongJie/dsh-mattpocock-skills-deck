@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-06T14:05:45.934Z",
+  "generatedAt": "2026-11-17T06:21:03.277Z",
   "generatedBy": "node scripts/gate-map.mts",
-  "chainLength": 600,
-  "gateCount": 600,
-  "attributedGates": 544,
+  "chainLength": 601,
+  "gateCount": 601,
+  "attributedGates": 545,
   "unattributedGates": 56,
   "buildOutputOnlyGates": 21,
   "completionRecordedGates": 143,
   "smokeLength": 8,
   "smokeCompletionRecordedGates": 5,
-  "graphFileCount": 962,
+  "graphFileCount": 990,
   "gates": [
     {
       "step": "node tests/verify-1207-splice-ts.ts",
@@ -10863,6 +10863,21 @@
       "reason": "归属来自 文件头 // 门禁归属: 注释（共 3 条）"
     },
     {
+      "step": "node tests/verify-gitee-room-shape.ts",
+      "file": "tests/verify-gitee-room-shape.ts",
+      "guards": [
+        "src/tracker/rooms/gitee"
+      ],
+      "dirs": [
+        "src/tracker/rooms/gitee"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": false,
+      "expectedAssertions": 0,
+      "reason": "归属来自 文件头 // 门禁归属: 注释（共 1 条）"
+    },
+    {
       "step": "node tests/verify-github-gh-via.ts",
       "file": "tests/verify-github-gh-via.ts",
       "guards": [
@@ -15949,6 +15964,9 @@
       "node tests/verify-error-rule-samples.ts",
       "node tests/verify-prompts.ts"
     ],
+    "src/tracker/rooms/gitee": [
+      "node tests/verify-gitee-room-shape.ts"
+    ],
     "src/tracker/rooms/github": [
       "node tests/verify-no-mixed-session.ts",
       "node tests/verify-1242-panel-numbers.ts",
@@ -16587,12 +16605,12 @@
   },
   "coverage": {
     "sourceRoot": "src",
-    "fileCount": 985,
-    "dirCount": 101,
-    "coveredFileCount": 985,
+    "fileCount": 1013,
+    "dirCount": 110,
+    "coveredFileCount": 1013,
     "ungatedFileCount": 0,
     "ungatedDirCount": 0,
-    "dedicatedDirCount": 80,
+    "dedicatedDirCount": 81,
     "guardedFiles": [
       "src/client/floating/Pop.ts",
       "src/client/floating/SkillFloatList.ts",
@@ -17369,6 +17387,34 @@
       "src/tracker/registry/shape.ts",
       "src/tracker/registry/views.ts",
       "src/tracker/rooms/README.md",
+      "src/tracker/rooms/gitee/client.ts",
+      "src/tracker/rooms/gitee/comments/write.ts",
+      "src/tracker/rooms/gitee/errors.ts",
+      "src/tracker/rooms/gitee/index.ts",
+      "src/tracker/rooms/gitee/issues/counts.ts",
+      "src/tracker/rooms/gitee/issues/maps.ts",
+      "src/tracker/rooms/gitee/issues/pages.ts",
+      "src/tracker/rooms/gitee/issues/read.ts",
+      "src/tracker/rooms/gitee/issues/shared.ts",
+      "src/tracker/rooms/gitee/issues/sub-issues.ts",
+      "src/tracker/rooms/gitee/issues/write.ts",
+      "src/tracker/rooms/gitee/labels/colors.ts",
+      "src/tracker/rooms/gitee/labels/list.ts",
+      "src/tracker/rooms/gitee/model/normalize.ts",
+      "src/tracker/rooms/gitee/model/repo-identity.ts",
+      "src/tracker/rooms/gitee/preflight.ts",
+      "src/tracker/rooms/gitee/project/init-project.ts",
+      "src/tracker/rooms/gitee/queries.ts",
+      "src/tracker/rooms/gitee/repo/current-user.ts",
+      "src/tracker/rooms/gitee/repo/permissions.ts",
+      "src/tracker/rooms/gitee/requests.ts",
+      "src/tracker/rooms/gitee/room/fixes.ts",
+      "src/tracker/rooms/gitee/room/links.ts",
+      "src/tracker/rooms/gitee/room/prompts.ts",
+      "src/tracker/rooms/gitee/support/capability-register.ts",
+      "src/tracker/rooms/gitee/support/json.ts",
+      "src/tracker/rooms/gitee/support/read-log.ts",
+      "src/tracker/rooms/gitee/support/repo-ref.ts",
       "src/tracker/rooms/github/channels/graphql/comment-paging.ts",
       "src/tracker/rooms/github/channels/graphql/index.ts",
       "src/tracker/rooms/github/channels/graphql/queries.ts",
@@ -17650,6 +17696,15 @@
       "src/tracker/kernel",
       "src/tracker/registry",
       "src/tracker/rooms",
+      "src/tracker/rooms/gitee",
+      "src/tracker/rooms/gitee/comments",
+      "src/tracker/rooms/gitee/issues",
+      "src/tracker/rooms/gitee/labels",
+      "src/tracker/rooms/gitee/model",
+      "src/tracker/rooms/gitee/project",
+      "src/tracker/rooms/gitee/repo",
+      "src/tracker/rooms/gitee/room",
+      "src/tracker/rooms/gitee/support",
       "src/tracker/rooms/github",
       "src/tracker/rooms/github/channels",
       "src/tracker/rooms/github/channels/graphql",
@@ -17738,6 +17793,7 @@
       "src/tracker/kernel",
       "src/tracker/registry",
       "src/tracker/rooms",
+      "src/tracker/rooms/gitee",
       "src/tracker/rooms/github",
       "src/tracker/rooms/github/channels/graphql",
       "src/tracker/rooms/github/channels/rest",
@@ -17824,6 +17880,38 @@
       },
       {
         "path": "src/shared/time-config",
+        "fileCount": 4
+      },
+      {
+        "path": "src/tracker/rooms/gitee/comments",
+        "fileCount": 1
+      },
+      {
+        "path": "src/tracker/rooms/gitee/issues",
+        "fileCount": 7
+      },
+      {
+        "path": "src/tracker/rooms/gitee/labels",
+        "fileCount": 2
+      },
+      {
+        "path": "src/tracker/rooms/gitee/model",
+        "fileCount": 2
+      },
+      {
+        "path": "src/tracker/rooms/gitee/project",
+        "fileCount": 1
+      },
+      {
+        "path": "src/tracker/rooms/gitee/repo",
+        "fileCount": 2
+      },
+      {
+        "path": "src/tracker/rooms/gitee/room",
+        "fileCount": 3
+      },
+      {
+        "path": "src/tracker/rooms/gitee/support",
         "fileCount": 4
       },
       {
