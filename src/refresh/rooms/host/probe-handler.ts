@@ -204,7 +204,8 @@ export function createProbeHandler(deps: ProbeHandlerDeps): { handleProbe: (args
           }
           const opCtx: any = { cwd, platform: await getPlatform(), fs: ctx.get('fs'), exec: function (c: any, ar: any, o: any): any { return detectionExec(c, ar, o, 'probe') }, logEvent: logTruncation }
           const r: any = await tracker.list(repoRef, {}, opCtx)
-          if (!r || !r.ok) return { ok: false, error: errText((r && r.error) || 'probe list 失败'), errorKind: kindOf(r && r.error) }
+          // 房间失败时把后端原文一起交回去：界面「展开错误原文」读的就是这一格，丢掉它用户只能看见一句「未能识别」。
+          if (!r || !r.ok) return { ok: false, error: errText((r && r.error) || 'probe list 失败'), raw: String(((r && r.error) && (r.error as { raw?: unknown }).raw) || ''), errorKind: kindOf(r && r.error) }
           // 这一拍不截断了：清掉「已记过」标记，下次再截断还能落一行。
           if (r.truncated !== true) delete truncationLoggedByRepo[rk1]
           const all: any[] = Array.isArray(r.data) ? r.data : []

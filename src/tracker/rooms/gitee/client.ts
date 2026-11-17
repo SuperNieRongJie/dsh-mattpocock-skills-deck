@@ -129,6 +129,38 @@ export function attachGiteeOpUsage<T extends object>(table: T): T {
 }
 
 /**
+ * npm 在 Windows 上把 CLI 装成一层启动脚本：`gitee`（sh 脚本）与 `gitee.cmd`（batch）。
+ * 这两种都不能直接起：裸名字回 ENOENT（CreateProcess 不按 PATHEXT 补后缀），
+ * .cmd 回 EINVAL（batch 得由 cmd.exe 解释）。所以碰到启动脚本就改起「node + 它旁边的 CLI 入口」，
+ * 参数原样交给 node，正文里的引号不经过任何 shell。
+ */
+const LAUNCHER_SCRIPT = /\.(cmd|bat|ps1)$/i
+
+function isLauncherScript(exe: string): boolean {
+  const base = String(exe).split(/[\\/]/).pop() || ''
+  return LAUNCHER_SCRIPT.test(base) || base.indexOf('.') < 0
+}
+
+/** 一次真实要起的命令：cmd 是程序，prefix 是排在调用方参数前面的固定参数。 */
+interface GiteeLaunch {
+  cmd: string
+  prefix: string[]
+}
+
+/**
+ * 把 resolveExecutable 给出的路径翻译成一条真能起来的命令。
+ *
+ * 直接给绝对路径而不是留着裸名字：裸名字靠 PATH 找，Windows 上先撞 ENOENT，
+ * 这里的失败会被上层当成「后端没反应」，界面上只剩一句「未能识别」。
+ */
+async function launchOf(platform: { path: { dirname(p: string): string; join(...parts: string[]): string } }, exe: string, nodeExe: string): Promise<GiteeLaunch> {
+  if (!isLauncherScript(exe)) return { cmd: exe, prefix: [] }
+  const dir = platform.path.dirname(exe)
+  const entry = platform.path.join(dir, 'node_modules', '@gitee', 'gitee-cli', 'bin', 'index.js')
+  return { cmd: nodeExe, prefix: [entry] }
+}
+
+/**
  * 造一个绑定到某次操作上下文的客户端。
  *
  * 拿不到平台、拿不到 exec、或者找不到 gitee 可执行文件时，都回 code=127 的假结果：
@@ -152,16 +184,34 @@ export function giteeClient(opCtx: GiteeCtx): GiteeClient {
       exe = null
     }
     if (!exe) {
-      return { stdout: '', stderr: 'gitee: command not found', code: 127 }
+      // 这句会原样出现在界面上，所以要写清「装什么」与「为什么要重启」：宿主只在启动时读一次 PATH。
+      return { stdout: '', stderr: 'gitee: command not found（请先安装 npm 包 @gitee/gitee-cli，装完重启宿主——宿主只在启动时读一次 PATH）', code: 127 }
     }
     noteGiteeUsage()
+    let nodeExe = 'node'
     try {
-      const res = await execFn('gitee', args, {
+      const found = await platform.resolveExecutable('node')
+      if (found) nodeExe = String(found)
+    } catch {
+      nodeExe = 'node'
+    }
+    let launch: GiteeLaunch = { cmd: String(exe), prefix: [] }
+    try {
+      launch = await launchOf(platform, String(exe), nodeExe)
+    } catch {
+      launch = { cmd: String(exe), prefix: [] }
+    }
+    try {
+      const res = await execFn(launch.cmd, launch.prefix.concat(args), {
         cwd: opts.cwd || ctx.cwd,
         signal: opts.signal,
         timeout: opts.timeout,
       })
       const out = normalizeResult(res)
+      // 非零退出却一个字都没吐：进程压根没起来（例如拿启动脚本直接起），别把空字符串当原文交上去。
+      if (out.code !== 0 && !out.stdout.trim() && !out.stderr.trim()) {
+        return { stdout: '', stderr: 'gitee ' + args.join(' ') + ' 以退出码 ' + out.code + ' 结束，但既没有输出也没有报错（这条命令很可能没有被真正执行）', code: out.code }
+      }
       // 不管退出码是 0 还是 1，只要说的是「没登录」，一律换成能照着做的中文句子。
       // 退出码在这件事上不可信：同一条命令在有的旗标组合下退 0、有的退 1。
       if (NOT_LOGGED_IN.test(out.stdout + ' ' + out.stderr)) {

@@ -116,7 +116,7 @@ export const probeNow = function (fromFocus: any, runtimeOpts?: any): void {
     // #1418：把「这一拍探测失败」写进本组每个会话，界面据此显示失败提示（理由见调用处注释）。
     //   失败原因按取数失败那条路的老规矩截到 160 字，避免把整段 stderr 塞进面板；
     //   这里只做展示，不发任何请求，也不改水印 —— 下一拍照常再探。
-    const noteProbeTrouble = function (why: any): void {
+    const noteProbeTrouble = function (why: any, raw?: any): void {
       let text: string = '';
       try { text = String(why || ''); } catch (eWhy) { text = ''; }
       if (!text) text = 'probe-not-ok';
@@ -126,8 +126,9 @@ export const probeNow = function (fromFocus: any, runtimeOpts?: any): void {
         const changed: boolean = (st.snapMode !== 'err') || (st.snapError !== text);
         st.snapMode = 'err';
         st.snapError = text;
-        // 这一档失败没有后端原文（探针自己没跑通），清掉上一次留下的原文，别让旧原文配新错误。
-        st.snapErrorRaw = '';
+        // 探针把房间失败的后端原文放在 res.raw 里；探针自己没跑通时没有原文，清掉上一次留下的，
+        // 免得旧的原文配新的错误。
+        st.snapErrorRaw = (typeof raw === 'string' && raw) ? raw : '';
         st.snapFail = { kind: 'probe-failed', at: Date.now() };
         st.snapLoading = false;
         if (changed) { try { emit(st); } catch (eEmit) {} }
@@ -161,7 +162,7 @@ export const probeNow = function (fromFocus: any, runtimeOpts?: any): void {
       //   之后某一拍成功，noteProbeHealthy 会把这条标记撤掉（装快照那条路另有 applySnap 负责）。
       //   只在状态真的变了才 emit：失败会每拍重复出现，不能每 5 秒重渲染一次面板。
       if (!(res && res.ok)) {
-        try { noteProbeTrouble((res && res.error) || 'probe-not-ok'); } catch (eTrouble) {}
+        try { noteProbeTrouble((res && res.error) || 'probe-not-ok', res && res.raw); } catch (eTrouble) {}
         return;
       }
       try { noteProbeHealthy(); } catch (eHealthy) {}
