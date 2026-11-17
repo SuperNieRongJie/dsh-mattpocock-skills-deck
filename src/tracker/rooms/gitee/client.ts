@@ -67,6 +67,21 @@ function text(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
 
+/**
+ * gitee CLI 的「没登录」不是失败退出：它照样以 0 退出，只把一句人话打到 stdout，
+ * 于是上层会拿到一段「像成功、又解析不出 JSON」的输出，最终只能报「未能识别」。
+ *
+ * 这里把这种输出统一改写成一次真正的失败（code=1），并把提示换成能照着做的中文句子；
+ * CLI 原文留在同一句后面，界面上展开原文时还看得见。
+ */
+const NOT_LOGGED_IN = /not logged in|未登录|请先登录/i
+
+function loginNoticeOf(res: GiteeRunResult): string {
+  const said = (res.stdout || res.stderr || '').trim().split('\n')[0].slice(0, 200)
+  const guide = 'gitee 未登录：请先在本机终端运行 gitee auth login，登录态由 gitee CLI 自己保存'
+  return said ? guide + '（CLI 原文：' + said + '）' : guide
+}
+
 function normalizeResult(res: unknown): GiteeRunResult {
   if (res == null) return { stdout: '', stderr: '', code: 0 }
   if (typeof res === 'object') {
@@ -146,7 +161,13 @@ export function giteeClient(opCtx: GiteeCtx): GiteeClient {
         signal: opts.signal,
         timeout: opts.timeout,
       })
-      return normalizeResult(res)
+      const out = normalizeResult(res)
+      // 不管退出码是 0 还是 1，只要说的是「没登录」，一律换成能照着做的中文句子。
+      // 退出码在这件事上不可信：同一条命令在有的旗标组合下退 0、有的退 1。
+      if (NOT_LOGGED_IN.test(out.stdout + ' ' + out.stderr)) {
+        return { stdout: '', stderr: loginNoticeOf(out), code: 1 }
+      }
+      return out
     } catch (e) {
       const bag = (e || {}) as Record<string, unknown>
       return {
@@ -158,10 +179,12 @@ export function giteeClient(opCtx: GiteeCtx): GiteeClient {
   }
 
   const api = (path: string, opts: GiteeApiOpts = {}, runOpts: GiteeRunOpts = {}): Promise<GiteeRunResult> => {
-    // 为什么把 --json 显式写上：不加它，CLI 可能按人读格式美化输出；房间只认可解析的 JSON。
-    const args: string[] = ['api', path, '--method', opts.method || 'GET']
+    // 三条都照着 gitee CLI v0.3.4 的原样行为写，改前先跑一次 `gitee api --help` 核对：
+    //   · 默认就把响应体原样打成 JSON，没有 --json 这个旗标（多写一个会直接「unknown flag」失败）；
+    //   · 只有 --method / --body / -f / -X / -p 这几个，查询串要拼在路径里；
+    //   · --no-tui 是全局旗标，非交互调用时关掉 TUI，免得拿终端控制字符当响应体。
+    const args: string[] = ['api', path, '--method', opts.method || 'GET', '--no-tui']
     if (opts.body && typeof opts.body === 'object') args.push('--body', JSON.stringify(opts.body))
-    args.push('--json')
     return run(args, runOpts)
   }
 

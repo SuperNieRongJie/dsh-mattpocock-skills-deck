@@ -45,6 +45,13 @@ export const GITEE_ERROR_RULES: readonly ErrorRule[] = [
   {
     kind: ERROR_KIND.AUTH as ErrorKind,
     layer: 'phrase',
+    pattern: /not logged in/i,
+    example: { text: 'Not logged in. Run: gitee auth login' },
+    note: 'CLI 在没登录时用这句英文，且退出码是 0；client.ts 会把它改写成失败结果，这里负责判成认证问题、把「去登录」的提示交给用户。',
+  },
+  {
+    kind: ERROR_KIND.AUTH as ErrorKind,
+    layer: 'phrase',
     pattern: /access token is required/i,
     example: { text: '{"message":"access token is required"}' },
     note: 'Open API 对匿名请求回的固定英文，通用表没有这一句；同样是认证问题。',
