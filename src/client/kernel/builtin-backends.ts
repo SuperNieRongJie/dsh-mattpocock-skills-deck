@@ -12,7 +12,10 @@
  * 真源是这份，同名 JavaScript 是构建产物。转写只加这一处注记与参数的类型标注，
  * 名单内容、函数行为、导出名一字未动。
  */
-export const BUILTIN_BACKENDS = [{ id: 'github', label: 'GitHub' }, { id: 'markdown', label: 'Markdown' }, { id: 'gitlab', label: 'GitLab' }]
+// 名单内容与宿主的注册表逐条对齐（2026-11-17 补 Gitee）：这份名单是 registry 数据还没到达时的显示兜底，
+// 少一个后端，用户在那个页面就永远选不到它（Gitee 接进来之后就是这样漏在切换窗之外的）。
+// 顺序沿用注册序，Gitee 排在最后；首项仍然是 GitHub，不改变「首项 = 默认后端」这条语义。
+export const BUILTIN_BACKENDS = [{ id: 'github', label: 'GitHub' }, { id: 'markdown', label: 'Markdown' }, { id: 'gitlab', label: 'GitLab' }, { id: 'gitee', label: 'Gitee' }]
 // #1600（#1188 跟进）：GitLab 能力已补齐，三处窗都不再置灰 —— 名单清空，界面可选性恢复三后端全可选。
 //   名单本身保留为空数组：切换弹窗、面板门控窗、状态栏门控窗三处仍问同一份答案，只是今天答案是「都不锁」。
 //   名单只管界面可选性，不参与判定链；以后若再有后端能力不全，把它的标识加回这份名单即可。

@@ -127,6 +127,23 @@ export const openSwitchConfirm = function (st: any, targetId: any): boolean {
     confirming: false,
   }
   emit(st)
+  // 后端清单：这张卡只列 st.backendModules 那一份，而这一格要靠别处（快照探测、面板门控窗）先填上；
+  // 没填过就退回内置名单 —— Gitee 接进来之后就是这样漏在卡外的（用户 2026-11-17 真机截图：只有三颗）。
+  // 所以开窗时这一格为空就自己问一次宿主，清单的真源始终是 wf.registry，这一段只是把它取回来。
+  const knownModules: any = st.backendModules
+  if (!Array.isArray(knownModules) || knownModules.length === 0) {
+    try {
+      if (typeof host !== 'undefined' && host.call) {
+        host.call('wf.registry', st.cwd ? { cwd: st.cwd } : {}).then(function (r: any): void {
+          const mods: any = (r && Array.isArray(r.modules)) ? r.modules : ((r && r.value && Array.isArray(r.value.modules)) ? r.value.modules : null)
+          if (!Array.isArray(mods) || mods.length === 0) return
+          st.backendModules = mods
+          try { setPresentationMap(mods) } catch (eP) {}
+          emit(st)
+        }).catch(function (): void {})
+      }
+    } catch (eR) {}
+  }
   if (typeof loadSwitchCri === 'function') loadSwitchCri(st)
   return true
 }
