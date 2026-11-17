@@ -110,11 +110,14 @@ async function main() {
   ok(!!bare.seen.logged.find((l) => l.event === 'guide.inject' && l.fields.outcome === 'action'), '退回那一路同样落日志')
 
   console.log('== 6. 声明只有一处、词条真的在词表里 ==')
-  ok(guide.GUIDE_STEPS.filter((s) => s.banner && s.banner.recheckBtn).length === 2, 'GUIDE_STEPS 里带第二颗按钮的步骤恰好两条（GitHub 登录与 GitLab 登录，#1190）')
+  // 2026-11-17：Gitee 登录那一步也带这颗按钮（同样是「登录状态未知」的场面，复用同一句词条），所以从两条变三条。
+  ok(guide.GUIDE_STEPS.filter((s) => s.banner && s.banner.recheckBtn).length === 3, 'GUIDE_STEPS 里带第二颗按钮的步骤恰好三条（GitHub、GitLab、Gitee 的登录步，#1190 与 2026-11-17）')
   const ghStep = guide.GUIDE_STEPS.filter((s) => s.id === 'gh:authed')[0]
   ok(!!ghStep && !!ghStep.banner && ghStep.banner.recheckBtn === 'banner.ghauthUnknownBtn', '那一条就是登录那一步，键仍是「重新检查」那一句')
   const glabStep = guide.GUIDE_STEPS.filter((s) => s.id === 'glab:authed')[0]
   ok(!!glabStep && !!glabStep.banner && glabStep.banner.recheckBtn === 'banner.ghauthUnknownBtn', 'GitLab 登录那一步同样带第二颗按钮，复用同一个键（#1190，不另造说法）')
+  const giteeStep = guide.GUIDE_STEPS.filter((s) => s.id === 'gitee:authed')[0]
+  ok(!!giteeStep && !!giteeStep.banner && giteeStep.banner.recheckBtn === 'banner.ghauthUnknownBtn', 'Gitee 登录那一步同样带第二颗按钮，仍复用那一个键（2026-11-17，不另造说法）')
   const cfg = readCopyConfig(root)
   const panel = cfg.families.filter((f) => f.family === 'panel')[0]
   const langs = Object.keys(cfg.languages.languages)
