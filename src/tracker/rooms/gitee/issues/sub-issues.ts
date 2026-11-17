@@ -23,6 +23,7 @@ import { normalizeIssue } from '../model/normalize.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoRefId } from '../support/repo-ref.js'
 import { emitReadDegraded } from '../support/read-log.js'
+import { PAGINATION } from '../../../contract/pagination.js'
 import { PAGE_SIZE, asRows, buildListQuery, isBag } from './shared.js'
 import { fetchIssueRaw } from './read.js'
 
@@ -30,7 +31,7 @@ type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
 export type Repo = Partial<RepositoryRef> | null | undefined
 
 /** 子票硬上限：超过就不继续翻，交给 capped 说明「没取全」。 */
-const MAX_SUB_ISSUES = 1000
+const MAX_SUB_ISSUES = PAGINATION.gitee.subIssuesMax
 
 export async function listSubIssues(
   ctx: GiteeCtx,

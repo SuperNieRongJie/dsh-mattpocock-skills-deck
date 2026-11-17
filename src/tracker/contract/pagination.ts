@@ -1,5 +1,5 @@
 /**
- * src/tracker/contract/pagination.ts —— 三个后端房间（GitHub、GitLab、本地 Markdown）共用的分页与额度数字表。
+ * src/tracker/contract/pagination.ts —— 四个后端房间（GitHub、GitLab、本地 Markdown、Gitee）共用的分页与额度数字表。
  *
  * 为什么要有这一份：
  *   这三个数字族原先在各房各写一份，同一个含义散在十几个文件里 —— 列出给界面的分页契约（缺省 50、上限 200）
@@ -85,5 +85,18 @@ export const PAGINATION = {
     // 本地 Markdown 房只有分页契约这一组数字：缺省 50、上限 200，与另外两房同一口径。
     limitDefault: 50,
     limitMax: 200,
+  },
+  gitee: {
+    // 分页契约：缺省一页 50 张、要多了按 200 封顶，与另外三房同一套口径（这是契约面的数，不是 Gitee 的算法）。
+    limitDefault: 50,
+    limitMax: 200,
+    // Gitee Open API v5 的 per_page 上限是 100（默认 20）。列表与子票都按 100 一页问，多要会被远端自己截断。
+    maxPerPage: 100,
+    // 单趟整仓列表最多翻 20 页（20 × 100 = 2000 张）；撞上就按「没取全」处理，不把残页当全量。
+    listMaxPages: 20,
+    // 数数那一趟最多翻 50 页（50 × 100 = 5000 张）；撞上就拒绝拿残数当答案。
+    countMaxPages: 50,
+    // 子票硬上限 1000 张：超过就不再翻，交给 capped 说明「没取全」。
+    subIssuesMax: 1000,
   },
 } as const

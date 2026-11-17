@@ -193,7 +193,6 @@ export function emitRepoTier(
       tier: String(tier || ''),
       ok: ok === true,
       latencyMs: ms(startedAt ? Date.now() - startedAt : 0),
-      opId: String(c.opId || ''),
     })
   })
 }

@@ -3,8 +3,8 @@
 // 门禁归属: src/tracker/contract/pagination.ts
 //
 // 为什么有这扇门禁：
-//   三个后端房间原先各自写着同一批「一次问后端要多少条、最多问几次」的数字：同一个 50/200 在 GitHub、
-//   GitLab、Markdown 三房各一份，同一个 100/1000 在 GitHub、GitLab 两房各一份。这些数字是后端接口的
+//   四个后端房间原先各自写着同一批「一次问后端要多少条、最多问几次」的数字：同一个 50/200 在 GitHub、
+//   GitLab、Markdown、Gitee 四房各一份，同一个 100/1000 在 GitHub、GitLab、Gitee 三房各一份。这些数字是后端接口的
 //   硬事实，不是给人调的旋钮；飘了不会有人报错，只会表现为「历史少了一段」「列表少了几条」。所以把它们
 //   收进 src/tracker/contract/pagination.ts 一处，再用这扇门禁钉住：
 //     · 共享表本身的值必须与下面 EXPECTED 清单逐项相等 —— 改数字必须同时改这份清单，diff 里一次就能
@@ -68,6 +68,14 @@ const EXPECTED = {
   markdown: {
     limitDefault: 50,
     limitMax: 200,
+  },
+  gitee: {
+    limitDefault: 50,
+    limitMax: 200,
+    maxPerPage: 100,
+    listMaxPages: 20,
+    countMaxPages: 50,
+    subIssuesMax: 1000,
   },
 } as const
 
@@ -237,13 +245,13 @@ for (const rel of scanned) {
 }
 check(importHits.length === 0, '用了 PAGINATION 的房内文件都从共享表导入', importHits.length === 0 ? undefined : { path: importHits.join('、'), key: 'import', note: `这些文件用了 PAGINATION 却没有从 contract/pagination.js 导入：${importHits.join('、')}` })
 
-// 第四节：共享表文件存在，且三个后端分组一个都不少（分组少了会让某一房静默退回「没页面大小」的默认值）。
+// 第四节：共享表文件存在，且四个后端分组一个都不少（分组少了会让某一房静默退回「没页面大小」的默认值）。
 check(fs.existsSync(path.join(ROOT, SHARED)), `共享表文件存在：${SHARED}`, { path: SHARED, key: 'exists', note: '共享表文件不存在' })
 const groups = typeof actualTable === 'object' && actualTable !== null ? Object.keys(actualTable as Record<string, unknown>).sort() : []
 check(
-  groups.join(',') === 'github,gitlab,markdown',
-  '共享表按三个后端分组：github、gitlab、markdown',
-  groups.join(',') === 'github,gitlab,markdown' ? undefined : { path: SHARED, key: 'groups', note: `共享表的分组是 ${groups.join(',') || '(空)'}，期望 github,gitlab,markdown` },
+  groups.join(',') === 'gitee,github,gitlab,markdown',
+  '共享表按四个后端分组：gitee、github、gitlab、markdown',
+  groups.join(',') === 'gitee,github,gitlab,markdown' ? undefined : { path: SHARED, key: 'groups', note: `共享表的分组是 ${groups.join(',') || '(空)'}，期望 gitee,github,gitlab,markdown` },
 )
 
 console.log('')

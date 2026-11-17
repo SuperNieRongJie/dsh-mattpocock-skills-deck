@@ -8,10 +8,13 @@
  * 为什么要拼查询串而不是用对象：CLI 没有独立的查询参数开关，查询串必须并进路径，
  * 所以这里产出的是「已经拼好的查询串」，requests.ts 原样接过去。
  */
-export const PAGE_SIZE = 100
+import { PAGINATION } from '../../../contract/pagination.js'
+
+/** 一页问多少张：Gitee Open API v5 的 per_page 上限是 100（默认 20），按上限问能少翻页。 */
+export const PAGE_SIZE = PAGINATION.gitee.maxPerPage
 
 /** 单趟最多翻多少页；撞上就按「没取全」处理，绝不把残页当全量。 */
-export const LIST_MAX_PAGES = 20
+export const LIST_MAX_PAGES = PAGINATION.gitee.listMaxPages
 
 /** 契约两态映射成远端的两个状态值；顺序固定，日志与测试都靠它。 */
 export function remoteStatesOf(state: string | undefined): string[] {

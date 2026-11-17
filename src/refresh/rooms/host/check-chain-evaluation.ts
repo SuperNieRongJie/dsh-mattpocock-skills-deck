@@ -445,44 +445,23 @@ export function createDetectChain(deps: DetectChainDeps) {
           registry.register('backend:markdown:scratchWritable', mdPred)
           registry.register('backend:markdown:containersReadable', mdPred)
         } catch (e) {}
+        // 四个后端谓词的注册体一模一样：按当前界面语言调一份判定函数、把异常收成 pending。同一段写法抄四遍会让
+        //   本文件越过 350 有效行的上限（tests/verify-file-granularity.ts），所以只写一次；注册键仍写在调用处，
+        //   因为 tests/verify-1187-gitlab-chain-predicates.ts 靠读这些字面量核对「哪个目录项对应哪个键」。
+        const verdictBody = (verdict: (pr: Parameters<typeof glabAuthVerdict>[0], zh: boolean) => ReturnType<typeof glabAuthVerdict>) =>
+          async function (check: unknown, pctx: PredicateCtx) { try { return verdict(await envProbe.preflightOnce(), (pctx && pctx.lang) !== 'en') } catch (e) { return { status: 'pending' as const, detail: String((e && (e as CaughtError).message) || e) } } }
         // #1187：GitLab 后端的两行。目录项要的键是 glab:authed → preflight:glabAuth、glab:repoAccess →
         //   backend:gitlab:repoAccess；从前全仓一条都没注册，注册表便把这两行如实回成
         //   「predicate not registered: …」的 pending —— 界面看到的是一句英文内部串，永远查不出结论。
         // 判定与话术在 chain-env-map.ts 的 glabAuthVerdict / glabRepoAccessVerdict（#1793：房间预检已按
         //   原文把「真没登录」与「问不出去（网络 / 环境）」分开，那边只按档位分派，不再看原文猜第二遍）。
-        try { registry.register('preflight:glabAuth', async function (check, pctx: PredicateCtx) {
-          try {
-            const zh = (pctx && pctx.lang) !== 'en'
-            // 前两关：glab 找没找到、登录态是什么；一次 preflight 的结果两个谓词共用。
-            return glabAuthVerdict(await envProbe.preflightOnce(), zh)
-          } catch (e) { return { status: 'pending', detail: String((e && (e as CaughtError).message) || e) } }
-        }) } catch (e) {}
-        try { registry.register('backend:gitlab:repoAccess', async function (check, pctx: PredicateCtx) {
-          try {
-            const zh = (pctx && pctx.lang) !== 'en'
-            // 第三关：拿会话认出来的仓库地址去问 GitLab 接口；没认出地址时房间会跳过这一关回成功，
-            //   谓词按 pending 说明「暂时确认不了」，不冒充可达。
-            return glabRepoAccessVerdict(await envProbe.preflightOnce(), zh)
-          } catch (e) { return { status: 'pending', detail: String((e && (e as CaughtError).message) || e) } }
-        }) } catch (e) {}
-        // Gitee 的两行（2026-11-17）：与 GitLab 那两行同形。目录项要的键是 gitee:authed → preflight:giteeAuth、
-        //   gitee:repoAccess → backend:gitee:repoAccess；缺这一处，检查页会如实回「predicate not registered」，
-        //   而那正是 #1187 修掉的形态。判定与话术在 chain-env-map.ts 的 giteeAuthVerdict / giteeRepoAccessVerdict。
-        try { registry.register('preflight:giteeAuth', async function (check, pctx: PredicateCtx) {
-          try {
-            const zh = (pctx && pctx.lang) !== 'en'
-            // 前两关：gitee 找没找到、登录态是什么；一次 preflight 的结果两个谓词共用。
-            return giteeAuthVerdict(await envProbe.preflightOnce(), zh)
-          } catch (e) { return { status: 'pending', detail: String((e && (e as CaughtError).message) || e) } }
-        }) } catch (e) {}
-        try { registry.register('backend:gitee:repoAccess', async function (check, pctx: PredicateCtx) {
-          try {
-            const zh = (pctx && pctx.lang) !== 'en'
-            // 第三关：拿会话认出来的仓库地址去问 Gitee 接口；没认出地址时房间会跳过这一关回成功，
-            //   谓词按 pending 说明「暂时确认不了」，不冒充可达。
-            return giteeRepoAccessVerdict(await envProbe.preflightOnce(), zh)
-          } catch (e) { return { status: 'pending', detail: String((e && (e as CaughtError).message) || e) } }
-        }) } catch (e) {}
+        try { registry.register('preflight:glabAuth', verdictBody(glabAuthVerdict)) } catch (e) {}
+        try { registry.register('backend:gitlab:repoAccess', verdictBody(glabRepoAccessVerdict)) } catch (e) {}
+        // Gitee 的两行（2026-11-17）：目录项要的键是 gitee:authed → preflight:giteeAuth、gitee:repoAccess →
+        //   backend:gitee:repoAccess；缺这一处，检查页会如实回「predicate not registered」，而那正是 #1187 修掉的
+        //   形态。判定与话术在 chain-env-map.ts 的 giteeAuthVerdict / giteeRepoAccessVerdict。
+        try { registry.register('preflight:giteeAuth', verdictBody(giteeAuthVerdict)) } catch (e) {}
+        try { registry.register('backend:gitee:repoAccess', verdictBody(giteeRepoAccessVerdict)) } catch (e) {}
         const kind = (args && args.kind) || 'all'
         const chainAndSnap = await genMod.resolveGenericChain(registry, ctx, kind)
         // #284 修订（对抗式审查 2026-08-28）：链上检查项【逐项独立求值】——

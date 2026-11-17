@@ -19,13 +19,14 @@ import { requestIssueList } from '../requests.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoRefId } from '../support/repo-ref.js'
 import { emitReadDegraded } from '../support/read-log.js'
+import { PAGINATION } from '../../../contract/pagination.js'
 import { PAGE_SIZE, asRows, buildListQuery, labelsOf, remoteStatesOf } from './shared.js'
 
 type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
 export type Repo = Partial<RepositoryRef> | null | undefined
 
 /** 单档最多翻多少页；100 条一页、50 页就是 5000 张票，够用且能保证结果不会无限期挂着。 */
-const COUNT_MAX_PAGES = 50
+const COUNT_MAX_PAGES = PAGINATION.gitee.countMaxPages
 
 type CountOutcome = { ok: true; count: number } | { ok: false; error: CountsResult }
 

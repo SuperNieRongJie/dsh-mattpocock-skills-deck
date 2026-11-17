@@ -20,14 +20,16 @@ import { normalizeIssue } from '../model/normalize.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoRefId } from '../support/repo-ref.js'
 import { emitReadDegraded } from '../support/read-log.js'
+import { PAGINATION } from '../../../contract/pagination.js'
 import { PAGE_SIZE, asRows, buildListQuery, isBag, labelsOf, remoteStatesOf } from './shared.js'
 import { counts } from './counts.js'
 
 type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
 export type Repo = Partial<RepositoryRef> | null | undefined
 
-const DEFAULT_LIMIT = 50
-const MAX_LIMIT = 200
+// 分页契约（缺省一页 50 张、要多了按 200 封顶）是四房同一套口径，数字住在 contract/pagination.ts。
+const DEFAULT_LIMIT = PAGINATION.gitee.limitDefault
+const MAX_LIMIT = PAGINATION.gitee.limitMax
 
 function limitOf(opts: PageOpts | undefined): number {
   const limit = opts && typeof opts.limit === 'number' ? opts.limit : 0
