@@ -155,6 +155,12 @@ zh:
   check.glab:authed.fail: glab 已登录
   check.glab:repoAccess.pass: GitLab 仓库可达
   check.glab:repoAccess.fail: GitLab 仓库可达
+  check.gitee:installed.pass: Gitee CLI (gitee) 已安装
+  check.gitee:installed.fail: Gitee CLI (gitee) 已安装
+  check.gitee:authed.pass: gitee 已登录
+  check.gitee:authed.fail: gitee 已登录
+  check.gitee:repoAccess.pass: Gitee 仓库可达
+  check.gitee:repoAccess.fail: Gitee 仓库可达
   check.md:workspace.pass: 本地工作区可读取
   check.md:workspace.fail: 本地工作区可读取
   check.md:scratchWritable.pass: 本地数据目录可读写
@@ -356,6 +362,12 @@ en:
   check.glab:authed.fail: Signed in to glab
   check.glab:repoAccess.pass: GitLab repo is reachable
   check.glab:repoAccess.fail: GitLab repo is reachable
+  check.gitee:installed.pass: Gitee CLI (gitee) is installed
+  check.gitee:installed.fail: Gitee CLI (gitee) is installed
+  check.gitee:authed.pass: Signed in to gitee
+  check.gitee:authed.fail: Signed in to gitee
+  check.gitee:repoAccess.pass: Gitee repo is reachable
+  check.gitee:repoAccess.fail: Gitee repo is reachable
   check.md:workspace.pass: Local workspace is readable
   check.md:workspace.fail: Local workspace is readable
   check.md:scratchWritable.pass: Local data dir is writable

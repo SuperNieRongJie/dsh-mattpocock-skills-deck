@@ -82,7 +82,7 @@ export const GUIDE_STEPS: ReadonlyArray<GuideStep> = Object.freeze([
     // 「尚未初始化／技能缺失」黄条再跳回蓝条，所以这一步读本地门控状态，不读链快照。
     id: 'selection:backendSelected',
     checks: ['selection:backendSelected'],
-    backends: ['github', 'markdown', 'gitlab'],
+    backends: ['github', 'markdown', 'gitlab', 'gitee'],
     ready: STEP_READY.GATE,
     banner: BANNER.gate,
     missing: MISSING.pickBackend,
@@ -153,12 +153,43 @@ export const GUIDE_STEPS: ReadonlyArray<GuideStep> = Object.freeze([
     blocksSetup: true,
   },
   {
+    // Gitee 三步与 glab 三步同形（2026-11-17）：装 CLI、登录、仓库可达，各自只适用 gitee。
+    //   横幅与注入键都复用通用那几条，所以清单不长出新文案；Gitee 专有的说法住在房间的 prompts.ts。
+    id: 'gitee:installed',
+    checks: ['gitee:installed'],
+    backends: ['gitee'],
+    ready: STEP_READY.CHAIN,
+    banner: BANNER.ghCli,
+    missing: MISSING.installCli,
+    blocksSetup: false,
+  },
+  {
+    id: 'gitee:authed',
+    checks: ['gitee:authed'],
+    backends: ['gitee'],
+    ready: STEP_READY.CHAIN,
+    banner: BANNER.ghAuth,
+    missing: MISSING.cliLogin,
+    blocksSetup: false,
+  },
+  {
+    // 与 GitHub / GitLab 的仓库步同一口径：这一步没过之前不注入初始化全文，
+    //   免得人在仓库都还没有的时候被灌一整篇初始化说明。
+    id: 'gitee:repoAccess',
+    checks: ['gitee:repoAccess'],
+    backends: ['gitee'],
+    ready: STEP_READY.CHAIN,
+    banner: BANNER.repo,
+    missing: MISSING.repoRemoteFix,
+    blocksSetup: true,
+  },
+  {
     // 第 7 步：工作区已初始化。2026-11-03 起判据回到初始化产物 docs/agents/issue-tracker.md
     //   （#1806 加的身份记录 workspace-root.yaml 已按维护者定版删除；工作区根只认
     //   docs/agents/workspace.yaml，往上找，见 docs/adr/20261103-workspace-root-upward-search.md）。
     id: 'tracker:initialized',
     checks: ['tracker:initialized'],
-    backends: ['github', 'markdown', 'gitlab'],
+    backends: ['github', 'markdown', 'gitlab', 'gitee'],
     ready: STEP_READY.CHAIN,
     banner: BANNER.setup,
     missing: MISSING.setupRun,
@@ -168,7 +199,7 @@ export const GUIDE_STEPS: ReadonlyArray<GuideStep> = Object.freeze([
     // 第 9 步：技能套件的三个技能，一条横幅管三项（取三项里最差的那一项，与今天渲染一致）。
     id: 'skill:wayfinder',
     checks: ['skill:wayfinder', 'skill:setup-matt-pocock-skills', 'skill:ask-matt'],
-    backends: ['github', 'markdown', 'gitlab'],
+    backends: ['github', 'markdown', 'gitlab', 'gitee'],
     ready: STEP_READY.CHAIN,
     banner: BANNER.skills,
     missing: MISSING.installSkills,

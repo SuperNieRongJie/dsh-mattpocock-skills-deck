@@ -69,7 +69,7 @@ export const GENERIC_CATALOG: readonly CatalogItem[] = Object.freeze([
     id: 'skill:wayfinder',
     label: '技能 wayfinder 已安装',
     scope: 'generic',
-    backends: ['github','markdown','gitlab'],
+    backends: ['github','markdown','gitlab','gitee'],
     check: { kind: 'primitive', primitive: PRIMITIVE_KIND.SKILL_PROBE, skill: 'wayfinder' },
     origin: 'host/index.js:SKILL_PROBE_NAMES (inventory 类别 8)',
   },
@@ -77,7 +77,7 @@ export const GENERIC_CATALOG: readonly CatalogItem[] = Object.freeze([
     id: 'skill:setup-matt-pocock-skills',
     label: '技能 setup-matt-pocock-skills 已安装',
     scope: 'generic',
-    backends: ['github','markdown','gitlab'],
+    backends: ['github','markdown','gitlab','gitee'],
     check: { kind: 'primitive', primitive: PRIMITIVE_KIND.SKILL_PROBE, skill: 'setup-matt-pocock-skills' },
     origin: 'host/index.js:SKILL_PROBE_NAMES',
   },
@@ -85,7 +85,7 @@ export const GENERIC_CATALOG: readonly CatalogItem[] = Object.freeze([
     id: 'skill:ask-matt',
     label: '技能 ask-matt 已安装',
     scope: 'generic',
-    backends: ['github','markdown','gitlab'],
+    backends: ['github','markdown','gitlab','gitee'],
     check: { kind: 'primitive', primitive: PRIMITIVE_KIND.SKILL_PROBE, skill: 'ask-matt' },
     origin: 'host/index.js:SKILL_PROBE_NAMES',
   },
@@ -93,7 +93,7 @@ export const GENERIC_CATALOG: readonly CatalogItem[] = Object.freeze([
     id: 'env:home',
     label: '用户主目录可解析',
     scope: 'generic',
-    backends: ['github','markdown','gitlab'],
+    backends: ['github','markdown','gitlab','gitee'],
     // /homeDir（2026-08-28 修复）：主目录判定只问平台层（#171：win32 不读 HOME，走 os.homedir→USERPROFILE；linux/mac 走 os.homedir）。
     //   原 ENV(HOME) 在 Windows 必然误报「HOME not set」（Windows 从不设置该环境变量）。
     //   为什么是通用检查：技能判装的单一根 ~/.agents/skills（#276/#281）由此解析，三后端共用同一用户级根，
@@ -113,7 +113,7 @@ export const GENERIC_CATALOG: readonly CatalogItem[] = Object.freeze([
     id: 'tracker:initialized',
     label: '工作区已初始化（有说明文件）',
     scope: 'generic',
-    backends: ['github','markdown','gitlab'],
+    backends: ['github','markdown','gitlab','gitee'],
     check: { kind: 'primitive', primitive: PRIMITIVE_KIND.FILE_EXISTS, path: 'docs/agents/issue-tracker.md' },
     origin: 'host/checkTracker (inventory 类别 8)',
   },
@@ -236,7 +236,44 @@ export const MARKDOWN_CATALOG: readonly CatalogItem[] = Object.freeze([
 
 // 冻结目录项本身（不只是数组）：GitHub 房的模块检查表现在直接引用这些对象、不再各持一份副本；
 // 元素如果可变，谁都能通过模块表改掉目录里的字，唯一真源就被绕过了。
-for (const list of [GENERIC_CATALOG, GITHUB_CATALOG, GITLAB_CATALOG, MARKDOWN_CATALOG]) {
+/** Gitee 后端检查目录（仅 gitee 适用）。
+ *
+ * 与 GITLAB_CATALOG 同形：装 CLI（命令名 gitee）→ 登录 → 仓库可达。
+ * 三项的判据本体都在 Gitee 房：命令是否存在由 COMMAND_EXISTS 问平台层，
+ * 登录态与仓库可达走房间 preflight 的三关（src/tracker/rooms/gitee/preflight.ts），
+ * 宿主侧的档位分派在 src/refresh/rooms/host/chain-env-map.ts 的 giteeAuthVerdict /
+ * giteeRepoAccessVerdict，两处注册在 src/refresh/rooms/host/check-chain-evaluation.ts。
+ * 这三行必须同时出现在目录、首开引导清单（guide-steps.ts）、宿主的谓词注册表与 config/copy/word.yaml
+ * 的状态词条里：缺哪一处，界面要么少一行、要么印出「predicate not registered」的内部串（#1187）。
+ */
+export const GITEE_CATALOG: readonly CatalogItem[] = Object.freeze([
+  {
+    id: 'gitee:installed',
+    label: 'Gitee 助手（gitee cli）已安装',
+    scope: 'backend',
+    backends: ['gitee'],
+    check: { kind: 'primitive', primitive: PRIMITIVE_KIND.COMMAND_EXISTS, command: 'gitee' },
+    origin: 'rooms/gitee/preflight.ts 第 1 关（resolveExecutable(gitee)）',
+  },
+  {
+    id: 'gitee:authed',
+    label: '已登录 Gitee',
+    scope: 'backend',
+    backends: ['gitee'],
+    check: { kind: 'preflight', id: 'giteeAuth' },
+    origin: 'rooms/gitee/preflight.ts 第 2 关（gitee api user）',
+  },
+  {
+    id: 'gitee:repoAccess',
+    label: '仓库在 Gitee 上可访问',
+    scope: 'backend',
+    backends: ['gitee'],
+    check: { kind: 'backend', id: 'repoAccess', backendId: 'gitee' },
+    origin: 'rooms/gitee/preflight.ts 第 3 关（gitee api /repos/{owner}/{repo}）',
+  },
+])
+
+for (const list of [GENERIC_CATALOG, GITHUB_CATALOG, GITLAB_CATALOG, GITEE_CATALOG, MARKDOWN_CATALOG]) {
   for (const item of list) Object.freeze(item)
 }
 
@@ -245,6 +282,7 @@ export const ALL_CATALOGS = Object.freeze({
   generic: GENERIC_CATALOG,
   github: GITHUB_CATALOG,
   gitlab: GITLAB_CATALOG,
+  gitee: GITEE_CATALOG,
   markdown: MARKDOWN_CATALOG,
 })
 
@@ -258,7 +296,7 @@ export const ALL_CATALOGS = Object.freeze({
  */
 export function scopeOf(checkId: string): 'generic' | 'backend' | null {
   if (GENERIC_CATALOG.some(c => c.id === checkId)) return 'generic'
-  if (GITHUB_CATALOG.some(c => c.id === checkId) || GITLAB_CATALOG.some(c => c.id === checkId) || MARKDOWN_CATALOG.some(c => c.id === checkId)) return 'backend'
+  if (GITHUB_CATALOG.some(c => c.id === checkId) || GITLAB_CATALOG.some(c => c.id === checkId) || GITEE_CATALOG.some(c => c.id === checkId) || MARKDOWN_CATALOG.some(c => c.id === checkId)) return 'backend'
   return null
 }
 
@@ -270,10 +308,11 @@ export function scopeOf(checkId: string): 'generic' | 'backend' | null {
  * @param {'github'|'markdown'|'gitlab'|null} backendId
  * @returns {CatalogItem[]}
  */
-export function catalogFor(backendId: 'github' | 'markdown' | 'gitlab' | null | undefined): CatalogItem[] {
+export function catalogFor(backendId: 'github' | 'markdown' | 'gitlab' | 'gitee' | null | undefined): CatalogItem[] {
   const base = [...GENERIC_CATALOG]
   if (backendId === 'github') base.push(...GITHUB_CATALOG)
   else if (backendId === 'gitlab') base.push(...GITLAB_CATALOG)
+  else if (backendId === 'gitee') base.push(...GITEE_CATALOG)
   else if (backendId === 'markdown') base.push(...MARKDOWN_CATALOG)
   return base
 }
@@ -287,7 +326,7 @@ export function catalogFor(backendId: 'github' | 'markdown' | 'gitlab' | null | 
  * @param {'github'|'markdown'|'gitlab'|null|undefined} backendId
  * @returns {CatalogItem[]}
  */
-export function backendItemsOf(backendId: 'github' | 'markdown' | 'gitlab' | null | undefined): CatalogItem[] {
+export function backendItemsOf(backendId: 'github' | 'markdown' | 'gitlab' | 'gitee' | null | undefined): CatalogItem[] {
   return catalogFor(backendId).filter((item) => item.scope === 'backend')
 }
 
@@ -306,6 +345,9 @@ export const MIGRATION_MAP = Object.freeze({
   'glab:installed': 'GITLAB_CATALOG[0]',
   'glab:authed': 'GITLAB_CATALOG[1]',
   'glab:repoAccess': 'GITLAB_CATALOG[2]',
+  'gitee:installed': 'GITEE_CATALOG[0]',
+  'gitee:authed': 'GITEE_CATALOG[1]',
+  'gitee:repoAccess': 'GITEE_CATALOG[2]',
   'md:workspace': 'MARKDOWN_CATALOG[0]',
   'md:scratchWritable': 'MARKDOWN_CATALOG[1]',
   'md:containersReadable': 'MARKDOWN_CATALOG[2]',

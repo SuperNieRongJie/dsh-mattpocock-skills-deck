@@ -41,7 +41,8 @@ function main(): void {
   const entries = Object.entries(MIGRATION_MAP as Record<string, string>)
   assert(entries.length > 0, '迁移表非空（空表会让逐条断言假绿）')
   for (const [key, ref] of entries) {
-    const m = /^(GENERIC|GITHUB|GITLAB|MARKDOWN)_CATALOG\[(\d+)\]$/.exec(ref)
+    // 2026-11-17：Gitee 目录加入后这里也要认出 GITEE_CATALOG，否则新加的三条迁移项会被当成写错格式。
+    const m = /^(GENERIC|GITHUB|GITLAB|GITEE|MARKDOWN)_CATALOG\[(\d+)\]$/.exec(ref)
     assert(m, `迁移表 ${key} 的编号写成「目录名[下标]」（实得 ${ref}）`)
     const list = (ALL_CATALOGS as Record<string, readonly ItemLike[]>)[m[1].toLowerCase()]
     assert(list, `迁移表 ${key} 指向的目录 ${m[1]} 存在`)

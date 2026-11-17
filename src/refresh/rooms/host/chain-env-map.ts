@@ -258,6 +258,54 @@ export function glabAuthVerdict(pr: ChainEnvProbeReply, zh: boolean): ChainPredi
   return { status: 'pending', detail: zh ? '读会话还没接上，暂时无法确认登录状态' : 'read session not available; login state unknown' }
 }
 
+// ── Gitee 的两行（2026-11-17）：与上面两对同构，只换后端与话术 ─────────────────────────
+// 为什么不让 gitee 复用 glab 那两个函数：函数名与话术里的命令（glab auth login / gitee auth login）
+//   是给人看的指引，写成参数拼进去会让「谁负责哪种后端」在调用点才看得出来；这里逐个后端写一份，
+//   与 gh / glab 的既有做法一致。档位仍只用一份 CHAIN_ENV_STAGE_OF，判法不重复。
+/**
+ * 「Gitee 仓库可达」这一项的判定（第三关）。
+ *
+ * 三关口径与 GitLab 那行相同：命令找得到（gh 档 = 本机环境那关）、登录态问得出来、
+ * 最后才拿 refId 去问 /repos/{owner}/{repo}。只有「确定仓库不存在或无权限」（kind=not-found）
+ * 才判 fail；未登录、网络异常、读会话没接上，一律 pending（诚实未知），
+ * 免得在仓库明明存在时把人引去「创建并发布」。
+ * 本地认不出仓库地址时房间会跳过第三关直接回成功，此时不能顺水推舟说「可达」。
+ */
+export function giteeRepoAccessVerdict(pr: ChainEnvProbeReply, zh: boolean): ChainPredicateVerdict {
+  if (pr.stage === 'pass') {
+    if (pr.refId) return { status: 'pass', detail: zh ? 'Gitee 接口访问正常' : 'gitee.com api 200' }
+    return { status: 'pending', detail: zh ? '暂时无法确认仓库可访问（本地认不出 Gitee 仓库地址）' : 'repo ref unknown locally; Gitee repo reachability unknown' }
+  }
+  if (pr.stage === 'gh') return { status: 'pending', detail: envPendingDetail(pr, zh, 'gitee', 'repo') }
+  if (pr.stage === 'repo') {
+    if (pr.kind === 'not-found') return { status: 'fail', detail: zh ? 'Gitee 上访问不到该仓库（可能还没创建，或你没有权限）' : 'API 404: repo not found (may not exist or no access)' }
+    return { status: 'pending', detail: zh ? '暂时无法确认仓库可访问（网络或登录态未知）' : 'Gitee repo reachability unknown (network or auth unknown)' }
+  }
+  if (pr.stage === 'auth') return { status: 'pending', detail: zh ? '暂时无法确认仓库可访问（网络或登录态未知）' : 'Gitee repo reachability unknown (network or auth unknown)' }
+  return { status: 'pending', detail: zh ? '读会话还没接上，暂时无法确认仓库可访问' : 'read session not available; repo reachability unknown' }
+}
+
+/**
+ * 「已登录 Gitee」这一项的判定（前两关）。
+ *
+ * 与 gh / glab 同口径：只有明确「未登录」（kind=auth）才判 fail 并给登录指引；
+ * 网络抖动、起进程失败、宿主接线没接上，一律 pending —— 网络出问题不该被说成「你没登录」。
+ * 档位由 Gitee 房预检按原文判出来（src/tracker/rooms/gitee/preflight.ts 的 loginProbeKind），
+ * 这里只按档位分派，不再拿原文猜第二遍。
+ */
+export function giteeAuthVerdict(pr: ChainEnvProbeReply, zh: boolean): ChainPredicateVerdict {
+  if (pr.stage === 'pass') return { status: 'pass', detail: zh ? '已登录' : 'Logged in' }
+  if (pr.stage === 'gh') return { status: 'pending', detail: envPendingDetail(pr, zh, 'gitee', 'login') }
+  if (pr.stage === 'repo') return { status: 'pass', detail: zh ? '已登录（仓库可达性由下一项判断）' : 'logged in (repo reachability is checked by the next item)' }
+  if (pr.stage === 'auth') {
+    const kind = pr.kind || 'exit'
+    if (kind === 'network') return { status: 'pending', detail: zh ? '网络异常，暂时无法确认 gitee 登录状态' : 'gitee login probe transport failure; login state unknown' }
+    if (kind === 'auth') return { status: 'fail', detail: zh ? 'gitee 登录状态已失效（重新执行 gitee auth login）' : 'gitee credential invalid or not logged in: re-authenticate (gitee auth login)' }
+    return { status: 'pending', detail: zh ? '暂时无法确认登录状态（' + kind + '）' : 'gitee login probe failed (' + kind + '); login state unknown' }
+  }
+  return { status: 'pending', detail: zh ? '读会话还没接上，暂时无法确认登录状态' : 'read session not available; login state unknown' }
+}
+
 // ── 一次求值只问一次环境的那只探针（#1444）────────────────────────────────────────
 /** 探针可选设置：这次求值问哪个后端的环境（缺省 github，老调用方的行为不变）。 */
 type ChainEnvProbeOptions = { backendId?: string }
