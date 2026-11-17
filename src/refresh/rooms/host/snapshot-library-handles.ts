@@ -80,7 +80,7 @@ export function cacheKeyOf(input: SnapshotLibraryKey): string {
 }
 
 export function supportedBackend(backend: string): backend is SnapshotBackend {
-  return backend === 'github' || backend === 'gitlab' || backend === 'markdown'
+  return backend === 'github' || backend === 'gitlab' || backend === 'markdown' || backend === 'gitee'
 }
 
 /** 拿一个可用的句柄；开不出来回 null（首屏不许因为库不可用而空，调用方会回落在线路径）。 */

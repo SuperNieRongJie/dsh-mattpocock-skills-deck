@@ -37,7 +37,9 @@
 // 旧链退役前由 src/host/refresh/workRoute.ts 用本文件的键与形状工具（#1271 已删；共享层文件之间不许互相引用）。
 
 /** 三个后端的字面（判据里要按后端分开：不同后端的票 key 不通用）。 */
-export const CHAIN_BACKENDS: readonly string[] = ['github', 'gitlab', 'markdown']
+// 认哪些后端标识：这是链入口的白名单，名单外的后端拿不到链（Gitee 2026-11-17 补进来，
+// 漏了它刷新链整条不跑，界面上的环境检查与引导全部停在「未执行」）。
+export const CHAIN_BACKENDS: readonly string[] = ['github', 'gitlab', 'markdown', 'gitee']
 
 /**
  * 动作类别（闭集合）。只回答「他在对这张票做什么」，一格一个词，不许出现自由文本

@@ -76,7 +76,7 @@ import { logSnapshot, shortHash } from './log.js'
 import { defaultSnapshotDbPath, resolveSnapshotWorkspaceRoot } from './paths.js'
 
 /** 允许的后端；运行时再挡一道，防止 JS 调用方传进不认识的字符串。 */
-const SNAPSHOT_BACKENDS = new Set(['github', 'gitlab', 'markdown'])
+const SNAPSHOT_BACKENDS = new Set(['github', 'gitlab', 'markdown', 'gitee'])
 
 /**
  * 判定「本地路径判不出来」的三种依据：都按本地多写者处理，并让开库日志说清这次是猜的

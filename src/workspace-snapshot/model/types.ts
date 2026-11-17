@@ -7,7 +7,10 @@
 // 这里不 import 任何运行时模块：model 是所有其他层的地基，反向依赖会让合并规则被 SQLite 绑住。
 
 /** 后端身份。GitHub/GitLab 的一批票 effort_id 写空串；本地 Markdown 用工作单元目录名。 */
-export type SnapshotBackend = 'github' | 'gitlab' | 'markdown'
+// 快照库按后端分库：每一个能出票的后端都在这条联合类型里。
+// 2026-11-17 补 gitee：漏了它，选了 Gitee 的工作区开库时会被运行时挡回「不认识的后端」，
+// 界面只显示一句「快照加载失败」，列表整个打不开。
+export type SnapshotBackend = 'github' | 'gitlab' | 'markdown' | 'gitee'
 
 /** 一组字段的知识状态。没有 issue_group 行才是「从没取过」，用 null 表示。 */
 export type GroupCompleteness = 'complete' | 'truncated' | 'unknown'
