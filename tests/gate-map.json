@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-17T06:21:03.277Z",
+  "generatedAt": "2026-11-18T03:27:59.965Z",
   "generatedBy": "node scripts/gate-map.mts",
   "chainLength": 601,
   "gateCount": 601,
@@ -10,7 +10,7 @@
   "completionRecordedGates": 143,
   "smokeLength": 8,
   "smokeCompletionRecordedGates": 5,
-  "graphFileCount": 990,
+  "graphFileCount": 991,
   "gates": [
     {
       "step": "node tests/verify-1207-splice-ts.ts",
@@ -10821,6 +10821,7 @@
         "src/refresh/rooms/host/git-execution.ts",
         "src/refresh/rooms/host/quota-ledger.ts",
         "src/refresh/rooms/host/refresh-gate.ts",
+        "src/tracker/rooms/gitee/index.ts",
         "src/tracker/rooms/github/transport/client.ts",
         "src/tracker/rooms/gitlab/client.ts",
         "src/tracker/rooms/gitlab/index.ts",
@@ -10834,6 +10835,7 @@
         "src/host",
         "src/host/platform",
         "src/refresh/rooms/host",
+        "src/tracker/rooms/gitee",
         "src/tracker/rooms/github/transport",
         "src/tracker/rooms/gitlab",
         "tests/fixtures/gh-gateway"
@@ -10842,7 +10844,7 @@
       "buildOutputOnly": false,
       "completionRecord": false,
       "expectedAssertions": 0,
-      "reason": "归属来自：读文件调用（readFileSync / readFile / path.join(ROOT, ...)） 3 条；源码里的路径字面量 12 条"
+      "reason": "归属来自：读文件调用（readFileSync / readFile / path.join(ROOT, ...)） 3 条；源码里的路径字面量 13 条"
     },
     {
       "step": "node tests/verify-ghes-runtime-capability.ts",
@@ -15965,6 +15967,7 @@
       "node tests/verify-prompts.ts"
     ],
     "src/tracker/rooms/gitee": [
+      "node tests/verify-gh-gateway.ts",
       "node tests/verify-gitee-room-shape.ts"
     ],
     "src/tracker/rooms/github": [
@@ -16605,9 +16608,9 @@
   },
   "coverage": {
     "sourceRoot": "src",
-    "fileCount": 1013,
+    "fileCount": 1014,
     "dirCount": 110,
-    "coveredFileCount": 1013,
+    "coveredFileCount": 1014,
     "ungatedFileCount": 0,
     "ungatedDirCount": 0,
     "dedicatedDirCount": 81,
@@ -17413,6 +17416,7 @@
       "src/tracker/rooms/gitee/room/prompts.ts",
       "src/tracker/rooms/gitee/support/capability-register.ts",
       "src/tracker/rooms/gitee/support/json.ts",
+      "src/tracker/rooms/gitee/support/label-alias.ts",
       "src/tracker/rooms/gitee/support/read-log.ts",
       "src/tracker/rooms/gitee/support/repo-ref.ts",
       "src/tracker/rooms/github/channels/graphql/comment-paging.ts",
@@ -17912,7 +17916,7 @@
       },
       {
         "path": "src/tracker/rooms/gitee/support",
-        "fileCount": 4
+        "fileCount": 5
       },
       {
         "path": "src/tracker/rooms/github/channels",

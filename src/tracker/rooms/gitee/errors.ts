@@ -30,9 +30,13 @@ export interface GiteeVerdict {
 /**
  * Gitee 侧可识别的措辞。
  *
- * 两条都挑自 CLI 的认证失败原文：Gitee 的 CLI 在没配置令牌时说的是「未登录」，
- * 或者「access token is required」。这两句都不在通用表里（通用表认英文 auth/unauthorized 一类），
- * 所以放在房间表；它们指向的结论都是「先登录」，不是「仓库不存在」。
+ * 前三条是 CLI 的认证失败原文：Gitee 的 CLI 在没配置令牌时说的是「未登录」、
+ * 「not logged in」或者「access token is required」。这几句都不在通用表里
+ * （通用表认英文 auth/unauthorized 一类），所以放在房间表；它们指向的结论都是
+ * 「先登录」，不是「仓库不存在」。
+ *
+ * 最后一条接的是查询参数取值不合法时的 HTTP 400：通用表只从原文里认
+ * 401/403/404/429，认不出 400，会把它当成网络故障，把 Gitee 点名的参数错误藏掉。
  */
 export const GITEE_ERROR_RULES: readonly ErrorRule[] = [
   {
@@ -55,6 +59,17 @@ export const GITEE_ERROR_RULES: readonly ErrorRule[] = [
     pattern: /access token is required/i,
     example: { text: '{"message":"access token is required"}' },
     note: 'Open API 对匿名请求回的固定英文，通用表没有这一句；同样是认证问题。',
+  },
+  {
+    // 通用表只从原文里认 401/403/404/429 这四种状态，HTTP 400 认不出状态，
+    // 最后会落成「网络问题」，把 Gitee 自己说的哪一项参数不对藏起来。
+    // 这类 400 是请求形状不合法（例如 sort 取值不在允许范围内），该判成「解析/参数」，
+    // 并把原文交给调用方；不能让人去查网络。
+    kind: ERROR_KIND.PARSE as ErrorKind,
+    layer: 'phrase',
+    pattern: /HTTP\s+400|does not have a valid value/i,
+    example: { text: 'HTTP 400: {"messages":["sort does not have a valid value"]}' },
+    note: 'Gitee 对查询参数取值不合法时回 HTTP 400 并在 messages 里点名哪一项；这属于参数形状错误，不是网络故障。',
   },
 ]
 

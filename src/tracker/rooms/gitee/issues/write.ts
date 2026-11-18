@@ -23,6 +23,7 @@ import { requestIssueCreate, requestIssueUpdate, requestMilestones } from '../re
 import { normalizeIssue } from '../model/normalize.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoNameOf, repoRefId } from '../support/repo-ref.js'
+import { WAYFINDER_MAP_LABEL, toCanonical, toRemote } from '../support/label-alias.js'
 import { LIST_MAX_PAGES, PAGE_SIZE, asRows, isBag } from './shared.js'
 import { fetchIssueRaw, getIssue } from './read.js'
 
@@ -42,6 +43,34 @@ function namesOf(labels: unknown): string[] {
     if (trimmed && !out.includes(trimmed)) out.push(trimmed)
   }
   return out
+}
+
+/**
+ * 建票时真正发给 Gitee 的标签。
+ *
+ * 调用方可能给 canonical 名（`wayfinder:map`），也可能已经把中划线名照抄进来；
+ * 这里先统一折成 canonical 名并去重，地图票再补上地图标签，最后整串翻成远端名。
+ * 顺序不能反：先去重再翻译，否则 `wayfinder:map` 与 `wayfinder-map` 会一起发出去，
+ * 同一个标签在请求里出现两遍。
+ */
+export function labelsForCreate(input: Pick<CreateInput, 'type' | 'labels'>): string[] {
+  const canonical: string[] = []
+  for (const name of namesOf(input.labels)) {
+    const mapped = toCanonical(name)
+    if (!canonical.includes(mapped)) canonical.push(mapped)
+  }
+  if (input.type === 'map' && !canonical.includes(WAYFINDER_MAP_LABEL)) canonical.push(WAYFINDER_MAP_LABEL)
+  return canonical.map(toRemote)
+}
+
+/** 覆盖式写标签用：同样先折成 canonical 去重，再翻译成远端名。 */
+export function labelsForSet(labels: unknown): string {
+  const canonical: string[] = []
+  for (const name of namesOf(labels)) {
+    const mapped = toCanonical(name)
+    if (!canonical.includes(mapped)) canonical.push(mapped)
+  }
+  return canonical.map(toRemote).join(',')
 }
 
 function loginsOf(assignees: unknown): string[] {
@@ -97,9 +126,9 @@ export async function createIssue(
   if (!title) return fail(ERROR_KIND.PARSE, 'create: title required', '', TRACKER_ERROR_STAGE.INPUT_REFUSED)
 
   try {
-    const labels = namesOf(input.labels)
-    // 地图票在 Gitee 上靠标签认，正文标记由调用方写；这里只补那一枚地图标签。
-    if (input.type === 'map' && !labels.includes('wayfinder:map')) labels.push('wayfinder:map')
+    // 地图票在 Gitee 上靠标签认，正文标记由调用方写；labelsForCreate 会补上地图标签，
+    // 并把 canonical 名翻成 Gitee 认识的中划线名（Gitee 不接受标签名里的半角冒号）。
+    const labels = labelsForCreate(input)
     const logins = loginsOf(input.assignees)
     const fields: Parameters<typeof requestIssueCreate>[2] = {
       repo: repoNameOf(refId),
@@ -120,6 +149,13 @@ export async function createIssue(
     if (!reply.ok) return reply.result
     if (!reply.issue.key || reply.issue.key === '0') {
       return failGitee(res, 'create: 回包里没有票号', res)
+    }
+    // Gitee 的建票回包固定把 labels 写成空数组，哪怕标签已经写上了。直接把它交给
+    // 调用方，面板会显示一张没有地目标签的票，看起来像又被静默丢弃了。这里补读一次
+    // 单票，用远端的真实状态作回执；补读失败不影响建票结论，仍返回建票回包。
+    if (labels.length > 0) {
+      const fresh = await fetchIssueRaw(effective, refId, reply.issue.key)
+      if (fresh.ok) return { ok: true, data: normalizeIssue(fresh.bag) }
     }
     return { ok: true, data: reply.issue }
   } catch (err) {
@@ -275,7 +311,7 @@ export async function setLabels(
       effective,
       refId,
       wantedKey,
-      { repo: repoNameOf(refId), labels: namesOf(labels).join(',') },
+      { repo: repoNameOf(refId), labels: labelsForSet(labels) },
       GITEE_READ_TIMEOUT_MS,
     )
     const reply = normalizePatchReply(res, 'setLabels: gitee api 改标签失败')

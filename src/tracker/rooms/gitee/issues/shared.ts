@@ -9,6 +9,7 @@
  * 所以这里产出的是「已经拼好的查询串」，requests.ts 原样接过去。
  */
 import { PAGINATION } from '../../../contract/pagination.js'
+import { labelsToRemote } from '../support/label-alias.js'
 
 /** 一页问多少张：Gitee Open API v5 的 per_page 上限是 100（默认 20），按上限问能少翻页。 */
 export const PAGE_SIZE = PAGINATION.gitee.maxPerPage
@@ -41,11 +42,21 @@ export interface ListQueryParts {
   page: number
 }
 
-/** 拼一页的查询串；per_page 固定 100（接口上限），少写了会把「满页」判错。 */
+/**
+ * 拼一页的查询串；per_page 固定 100（接口上限），少写了会把「满页」判错。
+ *
+ * sort 只认 `created` 与 `updated` 两个值：Gitee v5 的票列表接口没有
+ * `updated_at`，传错值会直接回 HTTP 400，整个列表请求就失败了。方向单独用
+ * `direction=desc` 表达，别把方向混进 sort。
+ *
+ * labels 要先翻成远端名：契约与 deck 传的是 `wayfinder:map` 这类带半角冒号的
+ * canonical 名，而 Gitee 上实际存的标签是 `wayfinder-map`。不翻的话，远端会按
+ * 一个不存在的标签去筛，安静地回空数组。
+ */
 export function buildListQuery(parts: ListQueryParts): string {
-  const params: string[] = ['per_page=' + PAGE_SIZE, 'page=' + String(parts.page), 'sort=updated_at', 'direction=desc']
+  const params: string[] = ['per_page=' + PAGE_SIZE, 'page=' + String(parts.page), 'sort=updated', 'direction=desc']
   if (parts.state) params.push('state=' + encodeURIComponent(parts.state))
-  if (parts.labels) params.push('labels=' + encodeURIComponent(parts.labels))
+  if (parts.labels) params.push('labels=' + encodeURIComponent(labelsToRemote(parts.labels)))
   if (parts.since) params.push('since=' + encodeURIComponent(parts.since))
   return params.join('&')
 }

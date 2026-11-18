@@ -1,9 +1,10 @@
 /**
  * src/tracker/rooms/gitee/issues/maps.ts —— 读地图薄行
  *
- * 服务端按 wayfinder:map 标签筛（state=all，开着关着都要），内存里再按小写复核一遍：
- * 原因有两个——Gitee 的 labels 参数是精确匹配（大小写敏感），而人手工改过的标签可能写成
- * Wayfinder:Map；服务端漏掉的这些行，这里兜住。
+ * 服务端按 wayfinder-map 标签筛（state=all，开着关着都要），内存里再用 isMapLabel 复核一遍：
+ * Gitee 的 labels 参数是精确匹配（大小写敏感），而人手工改过的标签可能写成 Wayfinder-Map；
+ * 服务端漏掉的这些行，这里兜住。canonical 名与中划线名的换算统一交给 label-alias，
+ * 本文件不再自己写死任何一个标签名。
  *
  * 一页 100 行、最多 10 页；撞上限只挂 truncated:true，不把「只读了这些」说成「就这些」。
  * 单页失败整趟失败：给出半份地图列表，比明确报错更容易让人以为地图真的只有这些。
@@ -19,17 +20,17 @@ import { normalizeIssue } from '../model/normalize.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoRefId } from '../support/repo-ref.js'
 import { emitReadDegraded } from '../support/read-log.js'
+import { WAYFINDER_MAP_LABEL, isMapLabel } from '../support/label-alias.js'
 import { PAGE_SIZE, asRows, buildListQuery, isBag } from './shared.js'
 
 type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
 export type Repo = Partial<RepositoryRef> | null | undefined
 
-const MAP_LABEL = 'wayfinder:map'
 const MAX_MAP_PAGES = 10
 
 function hasMapLabel(issue: Issue): boolean {
   if (!Array.isArray(issue.labels)) return false
-  return issue.labels.some((l) => String(l && l.name ? l.name : '').trim().toLowerCase() === MAP_LABEL)
+  return issue.labels.some((l) => isMapLabel(String(l && l.name ? l.name : '')))
 }
 
 export async function listMaps(ctx: GiteeCtx, repo: Repo): Promise<MapListOpResult> {
@@ -47,7 +48,7 @@ export async function listMaps(ctx: GiteeCtx, repo: Repo): Promise<MapListOpResu
       const res = await requestIssueList(
         ctx,
         refId,
-        buildListQuery({ state: 'all', labels: MAP_LABEL, page }),
+        buildListQuery({ state: 'all', labels: WAYFINDER_MAP_LABEL, page }),
         GITEE_SLOW_READ_TIMEOUT_MS,
       )
       if (res.code !== 0) {

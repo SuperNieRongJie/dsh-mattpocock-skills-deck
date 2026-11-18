@@ -55,7 +55,7 @@ export const GITEE_CAPABILITY_REGISTER = {
   listSubIssues: { tier: 'provided' },
   // 与 GitHub/GitLab 同一把尺子：颜色真源在远端标签，工作区文件没有读者，这条能力的后半做不到。
   ensureLabelColorsFile: { tier: 'unsupported-by-design', stubBy: 'backend' },
-  // 服务端按 wayfinder:map 标签筛，内存里再按小写复核，按更新时间倒序，撞页数上限挂 truncated。
+  // 服务端按 wayfinder-map 标签筛（契约名 wayfinder:map 由 label-alias 翻译），内存里再复核一遍，按更新时间倒序，撞页数上限挂 truncated。
   listMaps: { tier: 'provided' },
   // gitee api 不透响应头，本房今天没有读限额的通道；这是「问不出来」，不是「额度为零」。
   readBudget: { tier: 'unsupported-by-design', stubBy: 'registry' },

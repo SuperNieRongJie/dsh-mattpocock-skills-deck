@@ -78,6 +78,7 @@ const EXITS = [
   // #875 薄接线：更新安装器已收进更新包（旧登记两行随文件删除；包内出站由包自带测试覆盖）。
   { file: 'src/tracker/rooms/gitlab/client.ts', role: 'not-github', reason: '起的是 glab（另一个后端），不是 GitHub 的出口' },
   { file: 'src/tracker/rooms/gitlab/index.ts', role: 'not-github', reason: '起的是 git（读远端地址），不是 GitHub 出站' },
+  { file: 'src/tracker/rooms/gitee/index.ts', role: 'not-github', reason: '起的是 git remote get-url origin（只读读远端地址，用来判断当前目录是不是 Gitee 仓库），不是 GitHub 出站' },
   { file: 'src/tracker/rooms/gitlab/preflight.ts', role: 'not-github', reason: '起的是 glab（另一个后端的预检），不是 GitHub 的出口' },
 ]
 

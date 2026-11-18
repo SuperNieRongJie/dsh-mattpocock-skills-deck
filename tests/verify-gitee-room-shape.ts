@@ -175,6 +175,114 @@ check(
   `这些额度没有从共享表取：${notShared.map((site) => site.file + ':' + site.name).join('、')}`,
 )
 
+// 第五节：Gitee 的查询串与标签别名
+//
+// 这一节守的是两个已经真出过事的形状：列表查询里的 sort 值 Gitee 不认，整个列表请求 400；
+// 标签名里的半角冒号 Gitee 不收，写进去被静默丢弃、按它筛永远是空。两处都不报显眼的错，
+// 只表现为「列表打不开」与「地图永远是 0 行」，所以在这里把请求形状和换算规则钉住。
+const alias = await import('../src/tracker/rooms/gitee/support/label-alias.js')
+const sharedQuery = await import('../src/tracker/rooms/gitee/issues/shared.js')
+const normalizeMod = await import('../src/tracker/rooms/gitee/model/normalize.js')
+const writeMod = await import('../src/tracker/rooms/gitee/issues/write.js')
+const giteeErrors = await import('../src/tracker/rooms/gitee/errors.js')
+const { ERROR_KIND } = await import('../src/tracker/contract/vocabulary.js')
+
+const plainQuery = sharedQuery.buildListQuery({ page: 1 })
+check(
+  plainQuery.includes('sort=updated') && !plainQuery.includes('updated_at'),
+  '列表查询的 sort 用 Gitee 认得的 updated，不再用不存在的 updated_at',
+  `列表查询的 sort 形状不对：${plainQuery}`,
+)
+const filteredQuery = sharedQuery.buildListQuery({ page: 2, state: 'open', labels: 'wayfinder:map,enhancement' })
+check(
+  filteredQuery.includes('labels=' + encodeURIComponent('wayfinder-map,enhancement')),
+  '列表过滤把 canonical 标签名翻成 Gitee 上的中划线名再发出',
+  `列表过滤没有翻成远端名：${filteredQuery}`,
+)
+
+const canonicalToRemote = [
+  ['wayfinder:map', 'wayfinder-map'],
+  ['wayfinder:research', 'wayfinder-research'],
+  ['wayfinder:prototype', 'wayfinder-prototype'],
+  ['wayfinder:grilling', 'wayfinder-grilling'],
+  ['wayfinder:task', 'wayfinder-task'],
+]
+const wrongRemote = canonicalToRemote.filter(([canonical, remote]) => alias.toRemote(canonical) !== remote || alias.toCanonical(remote) !== canonical)
+check(
+  wrongRemote.length === 0,
+  '五枚 wayfinder 标签在 canonical 名与 Gitee 中划线名之间双向换算',
+  `这些标签换算不对：${wrongRemote.map((pair) => pair.join(' ↔ ')).join('、')}`,
+)
+check(
+  alias.toRemote('bug') === 'bug' && alias.toCanonical('enhancement') === 'enhancement',
+  '不在名单里的标签原样返回（别名只覆盖五枚 wayfinder 标签）',
+  '别名映射把不在名单里的标签也改了',
+)
+check(
+  alias.isMapLabel('wayfinder:map') && alias.isMapLabel('wayfinder-map') && !alias.isMapLabel('wayfinder-task'),
+  '地图标签判定同时认 canonical 名与远端名',
+  '地图标签判定没有同时认两种写法',
+)
+
+const createdMap = writeMod.labelsForCreate({ type: 'map', labels: [] })
+check(
+  createdMap.length === 1 && createdMap[0] === 'wayfinder-map',
+  '建地图票时会补上 wayfinder-map（不是带冒号的 wayfinder:map）',
+  `建地图票补出来的标签不对：${JSON.stringify(createdMap)}`,
+)
+const createdMixed = writeMod.labelsForCreate({ type: 'map', labels: ['wayfinder:map', 'wayfinder-map', 'wayfinder:research'] })
+check(
+  createdMixed.join(',') === 'wayfinder-map,wayfinder-research',
+  '建票时两种写法先合并去重、再翻成远端名，不会把同一枚标签发两遍',
+  `建票标签没有正确合并：${JSON.stringify(createdMixed)}`,
+)
+check(
+  writeMod.labelsForSet(['wayfinder:task', { name: 'wayfinder-task' }]) === 'wayfinder-task',
+  '覆盖式写标签同样先合并去重再翻成远端名',
+  `覆盖式写标签翻出来的名字不对：${writeMod.labelsForSet(['wayfinder:task', { name: 'wayfinder-task' }])}`,
+)
+
+const remoteLabel = normalizeMod.normalizeLabelEntry({ name: 'wayfinder-map', color: '8b5cf6' })
+check(
+  remoteLabel.name === 'wayfinder:map',
+  '读回 Gitee 的 wayfinder-map 时折成 canonical 名 wayfinder:map',
+  `读回的标签名是 ${remoteLabel.name}，期望 wayfinder:map`,
+)
+const remoteMapIssue = normalizeMod.normalizeIssue({
+  number: 'I1',
+  title: '一张地图',
+  state: 'open',
+  labels: [{ name: 'wayfinder-map', color: '8b5cf6' }],
+})
+check(
+  remoteMapIssue.type === 'map' && remoteMapIssue.labels[0]?.name === 'wayfinder:map',
+  '按真实 Gitee 回包形状（标签是 wayfinder-map）能认回地图票',
+  `地图票没有认回来：type=${remoteMapIssue.type}，labels=${JSON.stringify(remoteMapIssue.labels)}`,
+)
+
+const http400 = giteeErrors.classifyGiteeError({
+  code: 1,
+  stderr: 'HTTP 400: {"messages":["sort does not have a valid value"]}',
+})
+check(
+  http400.kind === ERROR_KIND.PARSE && http400.fallback === false,
+  'Gitee 的 HTTP 400 判成参数/解析问题，不再落成网络问题',
+  `HTTP 400 的判档是 ${http400.kind}（fallback=${String(http400.fallback)}），期望 parse`,
+)
+
+const aliasFreeFiles = [
+  'src/tracker/rooms/gitee/issues/maps.ts',
+  'src/tracker/rooms/gitee/model/normalize.ts',
+  'src/tracker/rooms/gitee/issues/write.ts',
+  'src/tracker/rooms/gitee/labels/colors.ts',
+]
+const stillHardcoded = aliasFreeFiles.filter((rel) => /wayfinder:/.test(masked.get(rel) || ''))
+check(
+  stillHardcoded.length === 0,
+  '标签名只在 label-alias 里定义，其余 Gitee 文件不再写死带冒号的名字',
+  `这些文件还写死了带冒号的标签名：${stillHardcoded.join('、')}`,
+)
+
 console.log('')
 if (failures.length > 0) {
   console.log(`✗ Gitee 房结构与纪律门禁失败：${failures.length} 项（共 ${checks} 项检查）`)

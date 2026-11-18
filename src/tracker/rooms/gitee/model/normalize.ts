@@ -18,8 +18,7 @@ import type { Actor, IssueType, State } from '../../../contract/identity.js'
 import { ISSUE_TYPE, STATE } from '../../../contract/vocabulary.js'
 import { markerKindInHeader } from '../../../../shared/issue-file/src/marker.js'
 import { normalizeColor } from '../../../../shared/label-color/src/colors.js'
-
-const MAP_LABEL = 'wayfinder:map'
+import { isMapLabel, toCanonical } from '../support/label-alias.js'
 
 /** 回包是不是一个键值袋。 */
 export function asBag(raw: unknown): Record<string, unknown> {
@@ -43,7 +42,9 @@ function colorOf(v: unknown): string {
 
 function normalizeLabel(raw: unknown): Label | null {
   const bag = asBag(raw)
-  const name = str(bag['name']).trim()
+  // Gitee 上的真实标签名是 wayfinder-map，契约与 deck 用 wayfinder:map；读回来先统一成 canonical 名，
+  // 这样类型推断、列表筛选、面板展示都只需要认识一套名字。
+  const name = toCanonical(str(bag['name']).trim())
   if (!name) return null
   const label: Label = { name, color: colorOf(bag['color']) }
   const description = str(bag['description']).trim()
@@ -82,7 +83,7 @@ function bodyOf(bag: Record<string, unknown>): string {
 /** 类型推断：正文里的规格标记优先，其次地图标签，其余都算普通票。 */
 function deriveType(bag: Record<string, unknown>, body: string, labels: Label[]): IssueType {
   if (markerKindInHeader(body) === 'spec') return ISSUE_TYPE.SPEC
-  if (labels.some((l) => l.name.toLowerCase() === MAP_LABEL)) return ISSUE_TYPE.MAP
+  if (labels.some((l) => isMapLabel(l.name))) return ISSUE_TYPE.MAP
   if (bag['isMap'] === true || bag['type'] === 'map') return ISSUE_TYPE.MAP
   return ISSUE_TYPE.ISSUE
 }

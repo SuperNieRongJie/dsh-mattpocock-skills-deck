@@ -14,6 +14,7 @@ import { GITEE_READ_TIMEOUT_MS } from '../../../../shared/time-config/src/values
 import { normalizeColor } from '../../../../shared/label-color/src/colors.js'
 import { failGitee } from '../errors.js'
 import { requestLabelUpdate } from '../requests.js'
+import { toCanonical, toRemote } from '../support/label-alias.js'
 import { repoRefId } from '../support/repo-ref.js'
 import { emitReadDegraded } from '../support/read-log.js'
 
@@ -32,7 +33,9 @@ export async function setLabelColors(
   const failed: LabelColorBatchResult['failed'] = []
   try {
     for (const change of Array.isArray(changes) ? changes : []) {
-      const name = String(change && change.name != null ? change.name : '').trim()
+      // 调用方按 canonical 名（wayfinder:map）传；Gitee 的标签名是 wayfinder-map，
+      // 发请求前翻成远端名，回执里仍用调用方认识的 canonical 名。
+      const name = toCanonical(String(change && change.name != null ? change.name : '').trim())
       const color = normalizeColor(String(change && change.color != null ? change.color : ''))
       if (!name || color === null) {
         failed.push({
@@ -47,7 +50,7 @@ export async function setLabelColors(
         })
         continue
       }
-      const res = await requestLabelUpdate(ctx, refId, name, { color }, GITEE_READ_TIMEOUT_MS)
+      const res = await requestLabelUpdate(ctx, refId, toRemote(name), { color }, GITEE_READ_TIMEOUT_MS)
       if (res.code !== 0) {
         const verdict = failGitee(res, String(res.stderr || '') || String(res.stdout || '') || 'setLabelColors: 改色失败', res, ctx)
         failed.push({ name, reason: verdict.error })
