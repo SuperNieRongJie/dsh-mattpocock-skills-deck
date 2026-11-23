@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-18T03:27:59.965Z",
+  "generatedAt": "2026-11-23T08:29:26.607Z",
   "generatedBy": "node scripts/gate-map.mts",
-  "chainLength": 601,
-  "gateCount": 601,
-  "attributedGates": 545,
+  "chainLength": 602,
+  "gateCount": 602,
+  "attributedGates": 546,
   "unattributedGates": 56,
   "buildOutputOnlyGates": 21,
   "completionRecordedGates": 143,
@@ -10865,6 +10865,21 @@
       "reason": "归属来自 文件头 // 门禁归属: 注释（共 3 条）"
     },
     {
+      "step": "node tests/verify-gitee-client-login-detect.ts",
+      "file": "tests/verify-gitee-client-login-detect.ts",
+      "guards": [
+        "src/tracker/rooms/gitee/client.ts"
+      ],
+      "dirs": [
+        "src/tracker/rooms/gitee"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": false,
+      "expectedAssertions": 0,
+      "reason": "归属来自 文件头 // 门禁归属: 注释（共 1 条）"
+    },
+    {
       "step": "node tests/verify-gitee-room-shape.ts",
       "file": "tests/verify-gitee-room-shape.ts",
       "guards": [
@@ -15968,6 +15983,7 @@
     ],
     "src/tracker/rooms/gitee": [
       "node tests/verify-gh-gateway.ts",
+      "node tests/verify-gitee-client-login-detect.ts",
       "node tests/verify-gitee-room-shape.ts"
     ],
     "src/tracker/rooms/github": [

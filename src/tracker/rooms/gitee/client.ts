@@ -18,7 +18,7 @@
 // @ts-expect-error 本域类型配置没有加载 @types/node
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { BackendContext, OpContext } from '../../contract/contexts.js'
-import { errMsg } from './support/json.js'
+import { errMsg, isBag, parseJsonSafe } from './support/json.js'
 
 type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
 
@@ -76,10 +76,37 @@ function text(v: unknown): string {
  */
 const NOT_LOGGED_IN = /not logged in|未登录|请先登录/i
 
-function loginNoticeOf(res: GiteeRunResult): string {
-  const said = (res.stdout || res.stderr || '').trim().split('\n')[0].slice(0, 200)
+/**
+ * 从一次回包里挑出「可以当人话读」的那部分文本；远端数据体不算人话。
+ *
+ * 为什么必须分开：成功读列表时 stdout 是一整段票列表 JSON，票的标题、正文、标签都是用户自己写的。
+ * 只要其中任何一张票提到「未登录」三个字，整段 JSON 就会被下面的正则命中，把一次成功的读取
+ * 改写成「gitee 未登录」的失败 —— 2026-11-23 的报障就是这么来的：列表里有一张讲未登录的票，
+ * 用户明明登录着，二次打开插件却看到「快照加载失败：gitee 未登录（CLI 原文：[{"id":…）」。
+ *
+ * 判断顺序：
+ *   · stdout 解析不出 JSON → 它本身可能就是 CLI 打的那句人话，照旧参与判断；
+ *   · 解析出来是标量（CLI 给提示套了层引号）→ 仍按人话看；
+ *   · 解析出来是对象或数组 → 远端数据体：里面出现这些字只说明有张票提到它，不是登录态；
+ *     唯一的例外是 Gitee 自己的错误信封（`{"message": "…"}`），那句话才是 CLI 要告诉我们的。
+ * stderr 始终参与判断：真正的认证失败经常只出现在那里。
+ */
+function humanTextOf(res: GiteeRunResult): string {
+  const stdout = res.stdout.trim()
+  const stderr = res.stderr.trim()
+  const join = (said: string): string => [said.trim(), stderr].filter(Boolean).join(' ')
+  if (!stdout) return stderr
+  const parsed = parseJsonSafe(stdout)
+  if (parsed === null) return join(stdout)
+  if (typeof parsed !== 'object') return join(String(parsed))
+  const message = isBag(parsed) && typeof parsed['message'] === 'string' ? parsed['message'] : ''
+  return join(message)
+}
+
+function loginNoticeOf(said: string): string {
+  const first = said.trim().split('\n')[0].slice(0, 200)
   const guide = 'gitee 未登录：请先在本机终端运行 gitee auth login，登录态由 gitee CLI 自己保存'
-  return said ? guide + '（CLI 原文：' + said + '）' : guide
+  return first ? guide + '（CLI 原文：' + first + '）' : guide
 }
 
 function normalizeResult(res: unknown): GiteeRunResult {
@@ -212,10 +239,12 @@ export function giteeClient(opCtx: GiteeCtx): GiteeClient {
       if (out.code !== 0 && !out.stdout.trim() && !out.stderr.trim()) {
         return { stdout: '', stderr: 'gitee ' + args.join(' ') + ' 以退出码 ' + out.code + ' 结束，但既没有输出也没有报错（这条命令很可能没有被真正执行）', code: out.code }
       }
-      // 不管退出码是 0 还是 1，只要说的是「没登录」，一律换成能照着做的中文句子。
+      // 不管退出码是 0 还是 1，只要「人话」里说的是「没登录」，一律换成能照着做的中文句子。
       // 退出码在这件事上不可信：同一条命令在有的旗标组合下退 0、有的退 1。
-      if (NOT_LOGGED_IN.test(out.stdout + ' ' + out.stderr)) {
-        return { stdout: '', stderr: loginNoticeOf(out), code: 1 }
+      // 只判人话、不扫数据体：票列表里出现的「未登录」是票面内容，不是登录态（见 humanTextOf）。
+      const humanText = humanTextOf(out)
+      if (NOT_LOGGED_IN.test(humanText)) {
+        return { stdout: '', stderr: loginNoticeOf(humanText), code: 1 }
       }
       return out
     } catch (e) {
