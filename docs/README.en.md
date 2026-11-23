@@ -221,9 +221,11 @@ Thanks to everyone who opened an issue, sent a PR, or joined a discussion — yo
 <!-- THANKS-TABLE-EN-START -->
 | Contributor | Tribute | Contributions |
 | --- | --- | --- |
+| [@qawse110](https://github.com/qawse110) | 💐 | [#1960](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1960) [#1961](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1961) [#1962](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1962) [#1963](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1963) [#1964](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1964) [#1965](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1965) [#1966](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1966) [#1967](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1967) [#1968](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1968) [#1969](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1969) |
 | [@zhengcookie](https://github.com/zhengcookie) | 🌹🌹🌹🌹🌹🌹 | [#960](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/960) [#1003](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1003) [#1160](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1160) [#1291](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1291) [#1942](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1942) [#1005](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/discussions/1005) |
 | [@pioneerAlone](https://github.com/pioneerAlone) | 🌹🌹🌹🌹🌹🌹 | [#234](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/234) [#274](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/274) [#298](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/298) [#645](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/645) [#273](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/pull/273) [#316](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/pull/316) |
 | [@15326325141](https://github.com/15326325141) | 🌹🌹🌹🌹🌹 | [#1786](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1786) [#1788](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1788) [#1789](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1789) [#1790](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1790) [#1791](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1791) |
+| [@tlaunog001](https://github.com/tlaunog001) | 🌹🌹🌹🌹 | [#1973](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1973) [#1974](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1974) [#1971](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/pull/1971) [#1972](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/pull/1972) |
 | [@wassup-u](https://github.com/wassup-u) | 🌹🌹🌹🌹 | [#1954](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1954) [#1955](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1955) [#1956](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1956) [#1957](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1957) |
 | [@Shimmernight](https://github.com/Shimmernight) | 🌹🌹🌹🌹 | [#277](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/277) [#106](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/pull/106) [#275](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/pull/275) [#287](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/pull/287) |
 | [@0FN50](https://github.com/0FN50) | 🌹🌹🌹 | [#1949](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1949) [#1950](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1950) [#1951](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1951) |
@@ -246,6 +248,9 @@ Thanks to everyone who opened an issue, sent a PR, or joined a discussion — yo
 | [@tafcear](https://github.com/tafcear) | 🌹🌹 | [#422](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/422) [#432](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/432) |
 | [@xiSage](https://github.com/xiSage) | 🌹🌹 | [#435](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/435) [#436](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/discussions/436) |
 | [@angenet](https://github.com/angenet) | 🌹🌹 | [#262](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/262) [#295](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/295) |
+| [@ajhillman](https://github.com/ajhillman) | 🌹 | [#1970](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1970) |
+| [@sukoya](https://github.com/sukoya) | 🌹 | [#1959](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1959) |
+| [@zuojinxin](https://github.com/zuojinxin) | 🌹 | [#1958](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/issues/1958) |
 | [@mxn404](https://github.com/mxn404) | 🌹 | [#1953](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/discussions/1953) |
 | [@zhaolj](https://github.com/zhaolj) | 🌹 | [#1952](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/pull/1952) |
 | [@Ryanzhaov](https://github.com/Ryanzhaov) | 🌹 | [#1948](https://github.com/FeatherHunter/dsh-mattpocock-skills-deck/discussions/1948) |
@@ -308,9 +313,9 @@ And thanks to everyone who left thoughts in comments and discussions. If you hit
 
 <a href="https://featherhunter.github.io/dsh-mattpocock-skills-deck/star-history.html">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/FeatherHunter/dsh-mattpocock-skills-deck/main/docs/star-history-dark.svg?v=202611160000" />
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/FeatherHunter/dsh-mattpocock-skills-deck/main/docs/star-history-light.svg?v=202611160000" />
-  <img alt="Star History Chart" src="https://raw.githubusercontent.com/FeatherHunter/dsh-mattpocock-skills-deck/main/docs/star-history-light.svg?v=202611160000" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/FeatherHunter/dsh-mattpocock-skills-deck/main/docs/star-history-dark.svg?v=202611220000" />
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/FeatherHunter/dsh-mattpocock-skills-deck/main/docs/star-history-light.svg?v=202611220000" />
+  <img alt="Star History Chart" src="https://raw.githubusercontent.com/FeatherHunter/dsh-mattpocock-skills-deck/main/docs/star-history-light.svg?v=202611220000" />
   </picture>
 </a>
 
