@@ -17,7 +17,7 @@ import { resolveRepoRefForCwd } from '../../../tracker/session/repo-ref.js'
 // #1870：刷新要的「上一份快照」与首屏读的是同一件事（开库、读回放、拆包），复用首屏那一份实现。
 import { firstScreenFromLibrary, withLibraryCounts } from './snapshot-library-first-screen.js'
 // #1：刷新写库那一段（成功/降级/失败三档与版本号口径）只有一个出处，单独住一份文件，本文件只调用它。
-import { persistRefreshRows as persistRowsToLibrary } from './refresh-row-persist.js'
+import { persistRefreshRows as recordIssueRows } from './refresh-row-persist.js'
 
 // ===== 类型契约（#1155）：下面这些声明只给类型检查看，编译后一行都不剩，运行时不引用任何名字 =====
 // 为什么都收在文件顶部：本文件的依赖全部由接线处 index.js 注入（那份是 JS，不检查编译错误），
@@ -153,10 +153,10 @@ export function createSessionRefresh(deps: RefreshDeps) {
       //   回 null 的三种情况都是「这一趟没有可报的库版本」：没行可写、库口没接、库层降级（只读/开不出/旧租约）；
       //   那时客户端退回它原先的口径（记发请求之前读到的那一版），不是把 null 当成第 0 版。
       //   写库那段本体搬在 refresh-row-persist.ts：它有两个读者（界面侧要版本、库层要续号起点），整段住一处，
-      //   降级与失败的口径才不会两边各写一套；本文件只留这层薄壳，名字仍叫 recordIssueRows——「这一趟刷新在
-      //   这里整批把行记进库」这件事要留在刷新自己的代码里看得见，不能只剩一个看不出读了写了的调用。
-      const recordIssueRows = function (persistCwd: string, persistBackend: string, persistRepo: RepoRef, startMergeVersion?: number): Promise<number | null> {
-        return persistRowsToLibrary({
+      //   降级与失败的口径才不会两边各写一套；本文件只留这层薄壳：刷新这一侧仍叫 persistRefreshRows，
+      //   里面把整批行交给 recordIssueRows 记进库——「这一趟刷新在这里整批写库」要留在刷新自己的代码里看得见。
+      const persistRefreshRows = function (persistCwd: string, persistBackend: string, persistRepo: RepoRef, startMergeVersion?: number): Promise<number | null> {
+        return recordIssueRows({
           rows: refreshRows, workspaceRoot: persistCwd, backend: String(persistBackend),
           repoIdentity: String((persistRepo && persistRepo.refId) || ''),
           startMergeVersion: startMergeVersion, getSnapshotLibrary: getSnapshotLibrary,
@@ -207,7 +207,7 @@ export function createSessionRefresh(deps: RefreshDeps) {
           if (!res.ok) throw new Error((res.error && res.error.message) || 'composeSnapshot failed')
           // 先提交库，再把新快照交给界面：写库失败就整趟刷新失败，不能让界面显示一份重启后会消失的数据。
           // #1：写库交回来的版本就是这份新数据的起点，随回包一起交给客户端记进版本簿。
-          const replyVersion = await recordIssueRows(cwd, backendId, repoRef, prevScreen && prevScreen.replay ? prevScreen.replay.mergeVersion : undefined)
+          const replyVersion = await persistRefreshRows(cwd, backendId, repoRef, prevScreen && prevScreen.replay ? prevScreen.replay.mergeVersion : undefined)
           // #1887：行写进库之后再读六个数字并挂到 deck 上（读不到就原样返回，不补 0）。
           const inner: Inner = await withLibraryCounts(upcaseSnapStates(res.snapshot), prevScreen)
           const flatTickets = (inner.maps || []).flatMap(function(m){ return (m.tickets || []); })
@@ -384,7 +384,7 @@ export function createSessionRefresh(deps: RefreshDeps) {
         const res2 = await composer2.composeSnapshot(backendId2, repoRef2, ctx2b, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: true, previousSnapshot: (prevScreen2 && prevScreen2.replay) ? prevScreen2.replay.snapshot : null, onRows: collectRows })
         if (!res2.ok) throw new Error((res2.error && res2.error.message) || 'composeSnapshot failed')
         // #1：回退这条路同样把写库之后的版本交回去（口径与上面 composer 支路一致）。
-        const replyVersion2 = await recordIssueRows(cwd, backendId2, repoRef2, prevScreen2 && prevScreen2.replay ? prevScreen2.replay.mergeVersion : undefined)
+        const replyVersion2 = await persistRefreshRows(cwd, backendId2, repoRef2, prevScreen2 && prevScreen2.replay ? prevScreen2.replay.mergeVersion : undefined)
         // #1887：与主支路同一口径：写库之后读一次六个数字并挂到 deck 上。
         const inner2: Inner = await withLibraryCounts(upcaseSnapStates(res2.snapshot), prevScreen2)
         ;(inner2.maps || []).forEach(function(m){ 
