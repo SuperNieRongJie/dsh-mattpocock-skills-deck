@@ -876,6 +876,11 @@ export const COMPLETION_RECORDED_GATES: Record<string, number> = {
   // 且合并落了标记就排上清除；子票高亮的键用界面查的那把尺子（工作单元 + 编号），不写裸编号。
   // 单跑实测 29 条。
   'verify-1926-flash-scope': 29,
+  // 2026-11-25 #1：手动刷新（wf.refresh）的回包带「写库之后」的库版本。真 SQLite + 真临时工作区：
+  // 成功那趟回包 version === 写库后的合并版本（与回放一致）；库层降级 readonly / legacy-writer 与
+  // 没接库口时 version 为 null（不拿 0 冒充）；客户端 installedSnapshotVersionOf 以回包版本为准、
+  // 第 0 版合法、负数/小数/字符串不算数；外加宿主两条组包支路与客户端两处接线的静态断言。单跑实测 23 条。
+  'verify-1-refresh-reply-version': 23,
 }
 
 // 冒烟链（scripts.smoke）上已经开闸的门禁，写法与上面那张表一样：写在这里 = 已开闸，值 = 期望条数。

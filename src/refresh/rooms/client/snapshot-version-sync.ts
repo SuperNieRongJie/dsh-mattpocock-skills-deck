@@ -103,8 +103,19 @@ function syncHash8(value: any): string {
 export type SnapshotVersionOutcome = 'skipped' | 'merged' | 'full' | 'failed'
 
 /** 只认非负整数版本：0 是合法版本，不能被当成「没有」。 */
-function syncVersionNumber(value: any): number | null {
-  return (typeof value === 'number' && Number.isInteger(value) && value >= 0) ? value : null
+function syncVersionNumber(value: any): number | null { return (typeof value === 'number' && Number.isInteger(value) && value >= 0) ? value : null }
+
+/**
+ * 装上一整份快照之后，版本簿该记哪一版（#1）。
+ *
+ * 回包里带非负整数版本时以它为准：那才是这份数据真正对应的库位置。手动刷新（wf.refresh）写库之后
+ * 回包里就有这个版本；以前这里只记「发请求之前」读到的那一版，于是列表按「工作区|版本号」复用刷新前的画面，
+ * 症状是「按了刷新，票状态/筛选/统计都不动」。
+ * 只在快照没带数字版本时退回发请求之前读到的那一版（例如某些后端 wf.snapshot 回包版本恒为空）。
+ * 反例：装不上时就别调用本函数——没进界面的数据不能宣称自己很新（#1931 那条路如实回 null）。
+ */
+export function installedSnapshotVersionOf(snap: any, seen: any): number | null {
+  const installedVersion = syncVersionNumber(snap && snap.version); return installedVersion === null ? syncVersionNumber(seen) : installedVersion
 }
 
 /**
@@ -382,8 +393,7 @@ function syncPortsOf(ctx: any): SnapshotVersionPorts {
       if (!installed) return null
       // 版本以「真的装上去的那一份」为准：请求之前问到的 seen 是起点（宁可旧一点也不会漏变化），
       // 而手上这份数据对应的是 snap.version。只有非负整数版本才认；快照没带数字版本时退回 seen。
-      const installedVersion = syncVersionNumber(snap.version)
-      const held = installedVersion === null ? seen : installedVersion
+      const held = installedSnapshotVersionOf(snap, seen)
       return held === null ? { version: null, unknownVersion: true } : { version: held }
     },
     logDegrade: function (reason: string): void {

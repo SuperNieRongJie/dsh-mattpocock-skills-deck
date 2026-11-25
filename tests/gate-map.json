@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-23T08:29:26.607Z",
+  "generatedAt": "2026-11-25T06:08:03.237Z",
   "generatedBy": "node scripts/gate-map.mts",
-  "chainLength": 602,
-  "gateCount": 602,
-  "attributedGates": 546,
+  "chainLength": 603,
+  "gateCount": 603,
+  "attributedGates": 547,
   "unattributedGates": 56,
   "buildOutputOnlyGates": 21,
-  "completionRecordedGates": 143,
+  "completionRecordedGates": 144,
   "smokeLength": 8,
   "smokeCompletionRecordedGates": 5,
-  "graphFileCount": 991,
+  "graphFileCount": 992,
   "gates": [
     {
       "step": "node tests/verify-1207-splice-ts.ts",
@@ -943,6 +943,24 @@
       "completionRecord": false,
       "expectedAssertions": 0,
       "reason": "归属来自 文件头 // 门禁归属: 注释（共 1 条）"
+    },
+    {
+      "step": "node tests/verify-1-refresh-reply-version.ts",
+      "file": "tests/verify-1-refresh-reply-version.ts",
+      "guards": [
+        "src/refresh/rooms/client/snapshot-sync.ts",
+        "src/refresh/rooms/client/snapshot-version-sync.ts",
+        "src/refresh/rooms/host/session-refresh-schedule.ts"
+      ],
+      "dirs": [
+        "src/refresh/rooms/client",
+        "src/refresh/rooms/host"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": true,
+      "expectedAssertions": 23,
+      "reason": "归属来自 文件头 // 门禁归属: 注释（共 3 条）"
     },
     {
       "step": "node tests/verify-1003-layout-in-file.ts",
@@ -15447,6 +15465,7 @@
       "node tests/verify-chain-renderer.ts",
       "node tests/verify-chain-session.ts",
       "node tests/verify-deck-slots.ts",
+      "node tests/verify-1-refresh-reply-version.ts",
       "node tests/verify-1082-work-route-table.ts",
       "node tests/verify-1220-shown-store.ts",
       "node tests/verify-1305-client-session.ts",
@@ -15488,6 +15507,7 @@
       "node tests/verify-deck-thin-reads.ts",
       "node tests/verify-deck-tools-matrix.ts",
       "node tests/verify-deck-tools.ts",
+      "node tests/verify-1-refresh-reply-version.ts",
       "node tests/verify-1003-no-cwd-masquerade.ts",
       "node tests/verify-1003-single-outlet.ts",
       "node tests/verify-1003-unified-decision.ts",
@@ -16624,9 +16644,9 @@
   },
   "coverage": {
     "sourceRoot": "src",
-    "fileCount": 1014,
+    "fileCount": 1015,
     "dirCount": 110,
-    "coveredFileCount": 1014,
+    "coveredFileCount": 1015,
     "ungatedFileCount": 0,
     "ungatedDirCount": 0,
     "dedicatedDirCount": 81,
@@ -17208,6 +17228,7 @@
       "src/refresh/rooms/host/quota-sync-status.ts",
       "src/refresh/rooms/host/refresh-assembly.ts",
       "src/refresh/rooms/host/refresh-gate.ts",
+      "src/refresh/rooms/host/refresh-row-persist.ts",
       "src/refresh/rooms/host/refresh-runtime.ts",
       "src/refresh/rooms/host/refusal-messages.ts",
       "src/refresh/rooms/host/repo-page-accounting.ts",
@@ -17876,7 +17897,7 @@
       },
       {
         "path": "src/refresh/rooms",
-        "fileCount": 73
+        "fileCount": 74
       },
       {
         "path": "src/shared/command-cleanup",

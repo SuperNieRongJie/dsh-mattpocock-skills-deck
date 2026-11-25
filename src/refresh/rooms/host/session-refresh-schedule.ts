@@ -16,6 +16,8 @@ import { SNAPSHOT_TTL_MS } from '../../../shared/time-config/src/values.js'
 import { resolveRepoRefForCwd } from '../../../tracker/session/repo-ref.js'
 // #1870：刷新要的「上一份快照」与首屏读的是同一件事（开库、读回放、拆包），复用首屏那一份实现。
 import { firstScreenFromLibrary, withLibraryCounts } from './snapshot-library-first-screen.js'
+// #1：刷新写库那一段（成功/降级/失败三档与版本号口径）只有一个出处，单独住一份文件，本文件只调用它。
+import { persistRefreshRows as persistRowsToLibrary } from './refresh-row-persist.js'
 
 // ===== 类型契约（#1155）：下面这些声明只给类型检查看，编译后一行都不剩，运行时不引用任何名字 =====
 // 为什么都收在文件顶部：本文件的依赖全部由接线处 index.js 注入（那份是 JS，不检查编译错误），
@@ -54,7 +56,9 @@ type Levels = { byNumber?: Record<string, unknown>; byKey?: Record<string, unkno
 type Deck = { counts?: { open?: unknown; closed?: unknown } | null; partial?: boolean; missingOpen?: unknown; [k: string]: unknown }
 // 信封（与 wf.snapshot 同一个实例）：这里只声明本文件用到的两口。
 type Envelope = { buildSnap(o: SnapInput): SnapOut; withWorkRouteTable<T>(reply: T, args?: Args): Promise<T> }
-type SnapInput = { repo?: unknown; repoRoot?: unknown; workspaceRoot?: unknown; maps?: unknown[]; issues?: unknown[]; thinTickets?: unknown[]; labels?: unknown[]; repository?: unknown; backendModules?: unknown; selection?: unknown; viewer?: unknown; viewerLogin?: unknown; deck?: unknown; snapshotFetch?: unknown }
+type SnapInput = { repo?: unknown; repoRoot?: unknown; workspaceRoot?: unknown; maps?: unknown[]; issues?: unknown[]; thinTickets?: unknown[]; labels?: unknown[]; repository?: unknown; backendModules?: unknown; selection?: unknown; viewer?: unknown; viewerLogin?: unknown; deck?: unknown; snapshotFetch?: unknown
+  // #1：这份回包对应的库版本（写库之后读到的 mergeVersion）；没有可报的版本时是 null。
+  version?: number | null }
 // 组装出来的快照：本文件读 fromCache / generatedMs / deck / maps / issues / labels，落盘时整份交回去。
 type SnapOut = { [k: string]: unknown; fromCache?: boolean; generatedMs?: number; maps?: unknown[]; issues?: unknown[]; labels?: unknown[]; deck?: Deck | null }
 type LogCtx = { fire(level: string, event: string, payload?: unknown): void; isEnabled(name: string): boolean }
@@ -143,33 +147,20 @@ export function createSessionRefresh(deps: RefreshDeps) {
       // 所以条数在收集时单独记，不靠数组长度后算。
       let refreshRowCount = 0
       const collectRows = function (rows: unknown): void { if (Array.isArray(rows)) { refreshRowCount += rows.length; for (let i = 0; i < rows.length; i += 1) refreshRows.push(rows[i]) } }
-      const persistRefreshRows = async function (persistCwd: string, persistBackend: string, persistRepo: RepoRef, startMergeVersion?: number): Promise<void> {
-        if (!refreshRows.length || typeof getSnapshotLibrary !== 'function') return
-        const rows = refreshRows.splice(0, refreshRows.length)
-        let lib: any = null
-        try { lib = await Promise.resolve(getSnapshotLibrary()) } catch (e) { lib = null }
-        if (!lib || typeof lib.recordIssueRows !== 'function') return
-        const result: any = await lib.recordIssueRows(Object.assign({
-          workspaceRoot: persistCwd,
-          backend: String(persistBackend),
+      // #1（2026-11-25 诊断后修复）：这一趟写进库之后库是第几版，要交回组包那一侧。
+      //   客户端拿它当「手上这份快照的起点版本」；否则手动刷新装上新数据、版本簿却还记着刷新前那一版，
+      //   列表按「工作区|版本号」复用旧画面，症状就是「刷新了但票状态/筛选/统计都不动」。
+      //   回 null 的三种情况都是「这一趟没有可报的库版本」：没行可写、库口没接、库层降级（只读/开不出/旧租约）；
+      //   那时客户端退回它原先的口径（记发请求之前读到的那一版），不是把 null 当成第 0 版。
+      //   写库那段本体搬在 refresh-row-persist.ts：它有两个读者（界面侧要版本、库层要续号起点），整段住一处，
+      //   降级与失败的口径才不会两边各写一套；本文件只留这层薄壳，名字仍叫 recordIssueRows——「这一趟刷新在
+      //   这里整批把行记进库」这件事要留在刷新自己的代码里看得见，不能只剩一个看不出读了写了的调用。
+      const recordIssueRows = function (persistCwd: string, persistBackend: string, persistRepo: RepoRef, startMergeVersion?: number): Promise<number | null> {
+        return persistRowsToLibrary({
+          rows: refreshRows, workspaceRoot: persistCwd, backend: String(persistBackend),
           repoIdentity: String((persistRepo && persistRepo.refId) || ''),
-          rows: rows,
-          atomic: true,
-        }, startMergeVersion === undefined ? null : { startMergeVersion: startMergeVersion }))
-        if (result && result.ok === true) return
-        const reason = String((result && result.reason) || 'unknown')
-        // 只读、开不出库、旧租约挡住本地写，这三种都是这一侧已知的降级，不是「写了一半」：
-        // 照常把新数据交给界面，只是这趟不落库。
-        //   - readonly：网络盘上另一个窗口拿着写权，或文件系统只读；
-        //   - unavailable：库开不出来；
-        //   - legacy-writer（#1932）：本地库里还有一条未过期的旧租约，说明可能还有旧版本窗口在写这个
-        //     工作区。这时拒绝本地写是为了避免新旧混写，用户要做的是「重启所有窗口」（设置页诊断会说），
-        //     而不是让这一次刷新整趟失败——刷新拿到的新数据仍然该显示出来。
-        // 反例：把 legacy-writer 当普通写失败抛错，会让升级现场每按一次刷新都弹一条红色失败提示，
-        // 而提示里没有任何一句说得出「重启窗口」这件事。
-        if (reason === 'readonly' || reason === 'unavailable' || reason === 'legacy-writer') return
-        // 真写失败则整趟刷新失败：宁可让用户看到失败，也不能让界面显示一份重启后会消失的数据。
-        throw new Error('这轮刷新没写进本地快照库（' + reason + '），为避免重启后回到旧数据，这次刷新按失败处理。')
+          startMergeVersion: startMergeVersion, getSnapshotLibrary: getSnapshotLibrary,
+        })
       }
       /**
        * #1774 / #1870：强制刷新也要把上一趟快照传给编排层，来源不完整时它才能补回上次已知的容器与子票。
@@ -215,7 +206,8 @@ export function createSessionRefresh(deps: RefreshDeps) {
           const res = await composer.composeSnapshot(backendId, repoRef, ctx2, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: true, previousSnapshot: (prevScreen && prevScreen.replay) ? prevScreen.replay.snapshot : null, onRows: collectRows })
           if (!res.ok) throw new Error((res.error && res.error.message) || 'composeSnapshot failed')
           // 先提交库，再把新快照交给界面：写库失败就整趟刷新失败，不能让界面显示一份重启后会消失的数据。
-          await persistRefreshRows(cwd, backendId, repoRef, prevScreen && prevScreen.replay ? prevScreen.replay.mergeVersion : undefined)
+          // #1：写库交回来的版本就是这份新数据的起点，随回包一起交给客户端记进版本簿。
+          const replyVersion = await recordIssueRows(cwd, backendId, repoRef, prevScreen && prevScreen.replay ? prevScreen.replay.mergeVersion : undefined)
           // #1887：行写进库之后再读六个数字并挂到 deck 上（读不到就原样返回，不补 0）。
           const inner: Inner = await withLibraryCounts(upcaseSnapStates(res.snapshot), prevScreen)
           const flatTickets = (inner.maps || []).flatMap(function(m){ return (m.tickets || []); })
@@ -313,6 +305,7 @@ export function createSessionRefresh(deps: RefreshDeps) {
             maps: inner.maps, issues: allForList, thinTickets: inner.thinTickets, labels: labels,
             repository: repoRef, backendModules: backendModules, selection: _sel,
             deck: inner.deck,
+            version: replyVersion,
             snapshotFetch: { source: 'online-rebuild', rows: refreshRowCount, at: Date.now() },
           })
           return adoptSnapLog(snap, cwd)
@@ -390,7 +383,8 @@ export function createSessionRefresh(deps: RefreshDeps) {
         const prevScreen2 = await previousScreenOf(backendId2, repoRef2)
         const res2 = await composer2.composeSnapshot(backendId2, repoRef2, ctx2b, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: true, previousSnapshot: (prevScreen2 && prevScreen2.replay) ? prevScreen2.replay.snapshot : null, onRows: collectRows })
         if (!res2.ok) throw new Error((res2.error && res2.error.message) || 'composeSnapshot failed')
-        await persistRefreshRows(cwd, backendId2, repoRef2, prevScreen2 && prevScreen2.replay ? prevScreen2.replay.mergeVersion : undefined)
+        // #1：回退这条路同样把写库之后的版本交回去（口径与上面 composer 支路一致）。
+        const replyVersion2 = await recordIssueRows(cwd, backendId2, repoRef2, prevScreen2 && prevScreen2.replay ? prevScreen2.replay.mergeVersion : undefined)
         // #1887：与主支路同一口径：写库之后读一次六个数字并挂到 deck 上。
         const inner2: Inner = await withLibraryCounts(upcaseSnapStates(res2.snapshot), prevScreen2)
         ;(inner2.maps || []).forEach(function(m){ 
@@ -459,6 +453,7 @@ export function createSessionRefresh(deps: RefreshDeps) {
           maps: inner2.maps, issues: allForList2, thinTickets: inner2.thinTickets, labels: labels2,
           repository: repoRef2, backendModules: backendModules2, selection: _sel,
           viewer: viewer2, viewerLogin: viewerLogin2, deck: inner2.deck,
+          version: replyVersion2,
           snapshotFetch: { source: 'online-rebuild', rows: refreshRowCount, at: Date.now() },
         })
         return adoptSnapLog(snap2, cwd)

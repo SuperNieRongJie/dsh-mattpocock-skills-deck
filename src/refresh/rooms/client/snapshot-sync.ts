@@ -45,6 +45,7 @@ declare const touchProbeAt: any;
 // #1891：按库版本取变化的那一套（实现在 refresh/rooms/client/snapshot-version-sync.ts）。
 //   本文件只留三处接线：整份取数的起点版本、304 之后把结论交给版本同步。
 declare const captureSnapshotVersion: any;
+declare const installedSnapshotVersionOf: any;
 declare const rememberSnapshotVersion: any;
 declare const runSnapshotVersionTick: any;
 declare const mergeSelection: any;
@@ -282,8 +283,18 @@ export const loadSnapshot = function (st: any, force: any, silent: any, why: any
         // #1931：装不上（全量安装守卫判定来者比手上那份旧）时不记版本 —— 没装却记成基线，
         //   等于替一份没进界面的数据宣称「我很新」。装的判断只在 _snapInstallBody 一处，这里只认它的回值。
         const _installedBody: boolean = _snapInstallBody(st, snap) !== false;
-        // #1891：这份整份数据对应「发请求之前」那一版；记下来，下一次拍就从它往上取变化。
-        if (_installedBody && _verAtRequestP) _verAtRequestP.then(function (v: any): void { try { if (typeof v === 'number' && typeof rememberSnapshotVersion === 'function') rememberSnapshotVersion(st.cwd, v); } catch (eVer2) {} });
+        // #1：这份整份数据对应哪一版，以「真装上去的那一份」的回包版本为准；回包没带数字版本时，
+        //   才退回发请求之前读到的那一版（此刻还只是一份将来会兑现的读数）。
+        //   以前只记请求前那一版：手动刷新（wf.refresh）写完库、装上新数据之后，版本簿却仍停在旧版本，
+        //   列表按「工作区|版本号」复用旧画面，症状就是「刷新了但票状态/筛选/统计都不动」。
+        if (_installedBody) {
+          const _installedVersion = (typeof installedSnapshotVersionOf === 'function') ? installedSnapshotVersionOf(snap, null) : null;
+          if (typeof _installedVersion === 'number' && typeof rememberSnapshotVersion === 'function') {
+            try { rememberSnapshotVersion(st.cwd, _installedVersion); } catch (eVer1) {}
+          } else if (_verAtRequestP) {
+            _verAtRequestP.then(function (v: any): void { try { if (typeof rememberSnapshotVersion === 'function') rememberSnapshotVersion(st.cwd, v); } catch (eVer2) {} });
+          }
+        }
       } else {
         st.snapMode = 'err';
         st.snapError = (snap && snap.error) ? String(snap.error).slice(0, 160) : tr('err.snapshotEmpty');
