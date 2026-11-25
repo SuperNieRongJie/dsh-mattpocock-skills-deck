@@ -24,7 +24,7 @@
  *  1. 同一版本直接复用：adopt 收到与手上相同的版本号时，一个切片都不重算、一个订阅都不通知。
  *     投影帧由调用方按「工作区 + 版本」共享，切会话拿到的是同一个帧，不是重新投影一遍。
  *  2. 只通知相关切片：改筛选只让 filters 与 rows 变；换投影只让 projection/counts/readout/rows/mapDetail/issueDetail 变；
- *     改阅读态只让 reading 变（翻页行变了才带上 rows，换打开的容器或票才带上 mapDetail / issueDetail）；
+ *     改阅读态只让 reading 变（翻页行变了才带上 rows 与 counts，换打开的容器或票才带上 mapDetail / issueDetail）；
  *     按需详情变了只让 issueDetail 变。counts 与 readout 不随筛选变化。
  *  3. 不碰宿主电话、不碰 React、不读时钟。这一层只装数据与迁移规则，所以可以单独构造、直接喂假数据测。
  *
@@ -85,6 +85,9 @@ export interface DeckViewPorts {
   prListOf?(frame: DeckFrame): any
   /** 「加载更多评论」命令背后的那一趟读取（#1896）。视图模型只负责喊它，电话在接线层里。 */
   loadMoreComments?(payload: any): any
+  /** 全局读数（#4）：入参是投影帧与阅读态，接线层据此把「已加载的翻页行」也数进去；
+   *  不给时沿用建帧时算好的那一份（同版本复用，不重算）。 */
+  countsOf?(frame: DeckFrame, reading: DeckReadingState): any
 }
 
 export interface DeckViewOptions {
@@ -287,6 +290,9 @@ export function createDeckView(options: DeckViewOptions): DeckView {
   const rebuildRows = function (changed: DeckViewSliceName[]): void {
     bump('rows', deckRowsOf(frame, filters, reading, ports), changed)
   }
+  // #4：counts 不再只在建帧时算一次 —— 已关闭票按需翻页取回的行也要数进统计，否则同一屏两个数。
+  // 翻页行非空时才向接线层要合并计数：没有翻页行时沿用帧上那份对象，换会话仍是同一个（一起省一次重算）
+  const rebuildCounts = function (changed: DeckViewSliceName[]): void { const paged = !!(reading && Array.isArray(reading.pageRows) && reading.pageRows.length > 0); bump('counts', (paged && typeof ports.countsOf === 'function') ? ports.countsOf(frame, reading) : frame.counts, changed) }
   // #1895：地图详情是「当前打开的那张容器」的切片，随投影与阅读态变；端口不给时恒为 null（别的屏不用它）。
   const rebuildMapDetail = function (changed: DeckViewSliceName[]): void {
     const next = (typeof ports.mapDetailOf === 'function') ? ports.mapDetailOf(frame, reading, detail) : null
@@ -299,7 +305,7 @@ export function createDeckView(options: DeckViewOptions): DeckView {
   }
   const rebuildFrameSlices = function (changed: DeckViewSliceName[]): void {
     bump('projection', { version: frame.version, snapshot: frame.projection, key: frame.key }, changed)
-    bump('counts', frame.counts, changed)
+    rebuildCounts(changed)
     bump('readout', frame.readout, changed)
     rebuildRows(changed)
     rebuildMapDetail(changed)
@@ -309,8 +315,7 @@ export function createDeckView(options: DeckViewOptions): DeckView {
   }
   // 初始切片：构造那一刻不通知任何订阅者（还没有人订阅），但版本号从 0 开始记。
   rebuildFrameSlices([])
-  bump('filters', filters, [])
-  bump('reading', reading, [])
+  bump('filters', filters, []); bump('reading', reading, [])
   // bump 只负责计数与通知；构造时把 changed 传空数组就不会误报「这一趟变了哪些切片」。
   return {
     slice: function (name: DeckViewSliceName): any { return slices[name] },
@@ -396,7 +401,7 @@ export function createDeckView(options: DeckViewOptions): DeckView {
       if (readingChanged) { reading = nextReading; bump('reading', reading, changed) }
       if (mapMoved) rebuildMapDetail(changed)
       if (issueMoved) rebuildIssueDetail(changed)
-      if (rowsChanged) rebuildRows(changed)
+      if (rowsChanged) { rebuildCounts(changed); rebuildRows(changed) }
       // 「加载更多评论」是视图模型的命令（#1896）：视图不再自己发请求，命令背后那趟读取由端口给。
       // 上一页还在路上时不重复发（节流口径与取数层一致）；取完的状态由下一次 adopt 从会话存储带回来。
       if (name === 'loadMoreComments') {
@@ -438,7 +443,7 @@ export function createDeckView(options: DeckViewOptions): DeckView {
           bump('reading', reading, changed)
           if (mapMoved) rebuildMapDetail(changed)
           if (issueMoved) rebuildIssueDetail(changed)
-          if (!deckSamePageRows(next.pageRows, prevPageRows)) rebuildRows(changed)
+          if (!deckSamePageRows(next.pageRows, prevPageRows)) { rebuildCounts(changed); rebuildRows(changed) }
         }
       }
       // 详情取数状态变了（取回了、失败了、评论在加载或失败次数变了）才重算票详情这一片。

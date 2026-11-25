@@ -195,6 +195,7 @@ async function main(): Promise<void> {
     ;(globalThis as any).createDeckView = createDeckView
     ;(globalThis as any).deckFiltersOf = (await import('../src/client/kernel/deck-view-model.ts')).deckFiltersOf
     ;(globalThis as any).deckReadingOf = deckReadingOf
+    ;(globalThis as any).issueRowsCountOf = (await import('../src/client/kernel/issue-pages.ts')).issueRowsCountOf
     ;(globalThis as any).deckMapDetailOf = deckMapDetailOf
     const binding: any = await import('../src/client/kernel/deck-view-binding.ts')
 

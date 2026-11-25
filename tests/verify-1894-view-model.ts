@@ -198,6 +198,7 @@ async function main(): Promise<void> {
     ;(globalThis as any).createDeckView = createDeckView
     ;(globalThis as any).deckFiltersOf = deckFiltersOf
     ;(globalThis as any).deckReadingOf = deckReadingOf
+    ;(globalThis as any).issueRowsCountOf = (await import('../src/client/kernel/issue-pages.ts')).issueRowsCountOf
     return import('../src/client/kernel/deck-view-binding.ts')
   })()
   {

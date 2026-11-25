@@ -167,6 +167,7 @@ async function main(): Promise<void> {
   ;(globalThis as any).deckFiltersOf = modelModule.deckFiltersOf
   ;(globalThis as any).deckReadingOf = deckReadingOf
   ;(globalThis as any).prStateKind = prStateKind
+  ;(globalThis as any).issueRowsCountOf = (await import('../src/client/kernel/issue-pages.ts')).issueRowsCountOf
   ;(globalThis as any).prIssuesOf = function (st: any): any[] {
     const snap: any = (st && st.snapshot) || null
     const out: any[] = []

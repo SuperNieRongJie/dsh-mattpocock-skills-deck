@@ -110,6 +110,27 @@ export const issuePageRowsOf = function (st: any, view: any): any[] {
   }
   return out;
 };
+/** 把「快照池里的行」与「按需翻页取回的行」合起来数开放/已关闭（#4）。
+ * 列表里已经画出来的票必须至少算进统计，否则同一屏会出现「2 已关闭」与「已加载 12 / 共 12」两个数；
+ * 重复的行只算一次（按票身份，池子里那份先数、它的状态为准），没有身份的行照原样各算一行。 */
+export const issueRowsCountOf = function (poolRows: any, pageRows: any): any {
+  const seen: Record<string, boolean> = {};
+  let open: number = 0;
+  let closed: number = 0;
+  const put = function (list: any): void {
+    const rows: any[] = Array.isArray(list) ? list : [];
+    for (let i: number = 0; i < rows.length; i++) {
+      const r: any = rows[i];
+      if (!r) continue;
+      const id: string = issuePageRowId(r);
+      if (id) { if (seen[id]) continue; seen[id] = true; }
+      if (r.state === 'CLOSED') closed++; else open++;
+    }
+  };
+  put(poolRows);
+  put(pageRows);
+  return { open: open, closed: closed, total: open + closed };
+};
 /** 「已加载多少张 / 一共多少张」：x 用页数据自己的行数（含池子里那份，界面那边会再加上池子里的行数），
  * n 用后端这次给的 total（还没有回包时为 null，界面据此退回手上的行数）。 */
 export const issuePageStatOf = function (st: any, view: any): any {

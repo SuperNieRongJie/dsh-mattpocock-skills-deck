@@ -34,13 +34,16 @@ declare const fetchIssueComments: any;
 // #1885 评审修复：详情页「进入 / 重试」的取数也收进接线层（与「加载更多」同一套命令）。
 declare const fetchIssueDetail: any;
 declare const idOfParts: any;
+// #4：池子行与已加载翻页行的合并计数（kernel/issue-pages.ts，构建时排在本片之前拼进同一个闭包）。
+declare function issueRowsCountOf(poolRows: any, pageRows: any): any;
 // #1897：拉取请求片段的接线端口、选中命令背后的导航入口、重试命令背后的取数入口（三个都可能是缺席的，
 //   所以调用处一律用 typeof 守卫；门禁单独 import 本文件时按需把它们挂到 globalThis 上）。
 declare function deckPrPortOf(...args: any[]): any; declare function setActiveIssue(...args: any[]): any; declare function loadSnapshot(...args: any[]): any;
 
 // 纯视图模型那一片由构建排在本片之前拼进同一个闭包（scripts/build.mts 的 kernel 清单），所以这里只声明形状、
 // 不写运行时 import（构建侧 toSpliceableFragment 会拒收残留的 import）。门禁单独加载本文件时，先挂上
-// globalThis.createDeckView / deckFiltersOf / deckReadingOf 再 import，与仓里其它 kernel 片的做法一致。
+// globalThis.createDeckView / deckFiltersOf / deckReadingOf 再 import，与仓里其它 kernel 片的做法一致；
+// #4 起还多一个 globalThis.issueRowsCountOf（合并计数那一格，缺席时 deckCountsFor 会抛 ReferenceError）。
 declare function createDeckView(options: any): any
 declare function deckFiltersOf(value: any): any
 declare function deckReadingOf(value: any): any
@@ -133,26 +136,26 @@ function deckPageRowsOf(scope: DeckViewScope, st: any): any[] {
   try { return (scope.issuePageRowsOf && st) ? (scope.issuePageRowsOf(st, 'list') || []) : [] } catch (e) { return [] }
 }
 
-/** 全局读数：总数/开放/已关闭/可接/阻塞/已认领 + BUG/诊断。六个数字优先取库的那一份（#1887）。 */
-function deckCountsFor(scope: DeckViewScope, projection: any): any {
+/** 全局读数：总数/开放/已关闭/可接/阻塞/已认领 + BUG/诊断。六个数字优先取库的那一份（#1887）；
+ * 拿不到库计数时按「快照池 + 已加载的翻页行」派生（#4）——列表里已经画出来的票必须算进来。 */
+export function deckCountsFor(scope: DeckViewScope, projection: any, pageRows?: any[]): any {
   const stLike: any = { snapshot: projection || {} }
   const rows = deckRowsOf(scope, projection)
-  let open = 0, closed = 0
-  for (let i = 0; i < rows.length; i++) { if (rows[i] && rows[i].state === 'CLOSED') closed++; else open++ }
+  const merged: any = issueRowsCountOf(rows, pageRows)
   const occupied = scope.occCount ? scope.occCount(stLike) : rows.filter(function (r: any): boolean { return !!(r && Array.isArray(r.assignees) && r.assignees.length) }).length
   // #1887：六个数字从库来（deck.counts）；拿不到（旧快照）才退回按手上这份派生，并如实标 complete=false。
   const lib = scope.deckCountsOf ? scope.deckCountsOf(stLike, false) : null
   const bug = scope.bugCount ? scope.bugCount(stLike) : 0
   const triage = scope.triageCount ? scope.triageCount(stLike) : 0
-  const local = { open: open, occupied: occupied, closed: closed }
+  const local = { open: merged.open, occupied: occupied, closed: merged.closed }
   const kpi = scope.kpiCountsOf
     ? scope.kpiCountsOf(stLike, false, local)
-    : { takeable: Math.max(0, open - occupied), blocked: occupied, claimed: 0, closed: closed, total: open + closed, open: open, complete: false, unknown: false, occupied: occupied }
+    : { takeable: Math.max(0, merged.open - occupied), blocked: occupied, claimed: 0, closed: merged.closed, total: merged.total, open: merged.open, complete: false, unknown: false, occupied: occupied }
   return {
-    total: lib ? lib.total : rows.length,
-    open: lib ? lib.open : open,
-    closed: lib ? lib.closed : closed,
-    takeable: lib ? lib.takeable : Math.max(0, open - occupied),
+    total: lib ? lib.total : merged.total,
+    open: lib ? lib.open : merged.open,
+    closed: lib ? lib.closed : merged.closed,
+    takeable: lib ? lib.takeable : Math.max(0, merged.open - occupied),
     blocked: lib ? lib.blocked : occupied,
     claimed: lib ? lib.claimed : 0,
     complete: !!(lib && lib.complete),
@@ -271,6 +274,8 @@ function deckReadingFromStore(scope: DeckViewScope, st: any, openIssue: any): an
 function deckPortsOf(scope: DeckViewScope, frame: any, st: any): any {
   const projection = frame.projection
   return {
+    // #4：统计与行同源 —— countsOf 拿到的 pageRows 与 rowsSource 拼进列表的是同一份。
+    countsOf: function (f: any, reading: any): any { return deckCountsFor(scope, f.projection, (reading && Array.isArray(reading.pageRows)) ? reading.pageRows : []) },
     rowsSource: function (f: any, reading: any): any[] {
       const rows = deckRowsOf(scope, f.projection)
       const pages = Array.isArray(reading.pageRows) ? reading.pageRows : []

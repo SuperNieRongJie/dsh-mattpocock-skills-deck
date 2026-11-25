@@ -284,6 +284,7 @@ async function main(): Promise<void> {
     ;(globalThis as any).createDeckView = dash.createDeckView
     ;(globalThis as any).deckFiltersOf = dash.deckFiltersOf
     ;(globalThis as any).deckReadingOf = dash.deckReadingOf
+    ;(globalThis as any).issueRowsCountOf = (await import('../src/client/kernel/issue-pages.ts')).issueRowsCountOf
     ;(globalThis as any).deckMapDetailOf = mapDetail.deckMapDetailOf
     ;(globalThis as any).deckContainerDetailOfStore = containerKernel.deckContainerDetailOfStore
     ;(globalThis as any).containerProjectionLoadOf = containerKernel.containerProjectionLoadOf

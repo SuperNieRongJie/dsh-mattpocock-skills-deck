@@ -150,6 +150,7 @@ async function main(): Promise<void> {
     ;(globalThis as any).deckFiltersOf = (await import('../src/client/kernel/deck-view-model.ts')).deckFiltersOf
     ;(globalThis as any).deckReadingOf = deckReadingOf
     ;(globalThis as any).deckIssueDetailOf = deckIssueDetailOf
+    ;(globalThis as any).issueRowsCountOf = (await import('../src/client/kernel/issue-pages.ts')).issueRowsCountOf
     const projectionModule: any = await import('../src/client/views/shared/detailProjection.ts')
     ;(globalThis as any).detailViewFor = projectionModule.detailViewFor
     ;(globalThis as any).snapshotRowFor = projectionModule.snapshotRowFor
