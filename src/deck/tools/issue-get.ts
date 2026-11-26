@@ -417,9 +417,16 @@ export function createDeckIssueGet(deps?: DeckIssueGetDeps) {
       if (first === 0) notes.push('评论默认 0 条（共有 ' + commentTotal + ' 条）：要看评论正文带 comments=N 再调一次（最大 200），总数这次已给。')
       const stateText = String(issue.state || '未知状态')
       const closedText = issue.closedAt ? '（关闭于 ' + String(issue.closedAt).slice(0, 10) + '）' : ''
+      // #11：Gitee 没有阻塞边的结构字段，两条阻塞关系都是从票正文末尾的「## Blocked by」小节读回来的。
+      // 房层读回时把来源标成 blockedBySource = 'body'；这个标注只在房层存在，契约没有这一列。
+      const blockedBySource = issue && typeof issue === 'object' ? (issue as { blockedBySource?: unknown }).blockedBySource : undefined
+      const blockedFromBody = blockedBySource === 'body'
+      const blockSourceTag = blockedFromBody ? '（来源：正文）' : ''
       // 反向边不全时，条数后面跟一句「可能不全」：数字本身照给（已经看到的那些是真的），但别让读者当成全量。
       const blockingText = wantBlocking
-        ? ('阻塞别人 ' + rel.blocking.length + ' 条' + (dependencies && dependencies.blockingComplete === false ? '（可能不全，见注记）。' : '。'))
+        ? ('阻塞别人 ' + rel.blocking.length + ' 条' + (dependencies && dependencies.blockingComplete === false
+          ? (blockedFromBody ? '（来源：正文；可能不全，见注记）。' : '（可能不全，见注记）。')
+          : (blockedFromBody ? '（来源：正文）。' : '。')))
         : '阻塞别人未取（blocking=false）。'
       const brief = issueBrief(issue)
       // #8：有的后端读不出原生父票字段，改用票正文里一行「上级地图：票号」兜底；房层读回时用
@@ -439,7 +446,7 @@ export function createDeckIssueGet(deps?: DeckIssueGetDeps) {
       return {
         value: {
           status: DECK_STATUS.OK,
-          text: '票 ' + key + ' 读回来了：状态 ' + stateText + closedText + '，父票 ' + (rel.parentKey ? rel.parentKey + (parentSource === 'body' ? '（来源：正文）' : parentSource === 'structure' ? '（来源：结构）' : '') : '（没有）') + '，被阻塞 ' + rel.blockedBy.length + ' 条，' + blockingText + statusSentenceOf(issue as Record<string, unknown>),
+          text: '票 ' + key + ' 读回来了：状态 ' + stateText + closedText + '，父票 ' + (rel.parentKey ? rel.parentKey + (parentSource === 'body' ? '（来源：正文）' : parentSource === 'structure' ? '（来源：结构）' : '') : '（没有）') + '，被阻塞 ' + rel.blockedBy.length + ' 条' + blockSourceTag + '，' + blockingText + statusSentenceOf(issue as Record<string, unknown>),
           data: {
             ticket: brief,
             body: bodyPayload,
@@ -450,12 +457,17 @@ export function createDeckIssueGet(deps?: DeckIssueGetDeps) {
               // 来源标注说「正文」时，父子关系写在这张票正文的一行「上级地图：票号」里，不是原生层级，
               // 落点如实记成「正文行」；说「结构」或没标来源时仍按契约的父子列记，分不出层级就如实降一档。
               parent: rel.parentKey ? (parentSource === 'body' ? EDGE_LANDING.BODY_LINE : EDGE_LANDING.CONTRACT_PARENT_FIELD) : EDGE_LANDING.UNKNOWN,
-              blockedBy: rel.blockedBy.length ? EDGE_LANDING.CONTRACT_BLOCK_FIELD : EDGE_LANDING.UNKNOWN,
+              // 来源是正文时，被阻塞关系写在这张票正文末尾的「## Blocked by」小节里，落点如实记「正文行」。
+              blockedBy: rel.blockedBy.length ? (blockedFromBody ? EDGE_LANDING.BODY_LINE : EDGE_LANDING.CONTRACT_BLOCK_FIELD) : EDGE_LANDING.UNKNOWN,
               // 房层已经明确说是正文兜底时，不能再讲「读路径只知道契约字段里有这条关系」——
               // 那是「来源不明」时的说法，这里来源是已知的。
-              caveat: parentSource === 'body'
-                ? '父子这一条：房层读回时标明关系写在票正文里的一行「上级地图：票号」上（来源：正文），这个后端读不出原生父子字段，所以落点是「正文行」而不是原生层级；阻塞那一条仍只看契约返回的字段。'
-                : '这两个落点是从契约返回的字段读出来的；要精确知道这个后端把父子放在原生层级还是平级链接，看返回里本次写操作留下的 evidence（deck_map_link 会写）。',
+              caveat: parentSource === 'body' && blockedFromBody
+                ? '父子与被阻塞两条：房层读回时都标明关系写在票正文里（来源：正文）——父票在开头一行「上级地图：票号」，被阻塞关系在末尾的「## Blocked by」小节；这个后端读不出原生结构字段，所以落点是「正文行」而不是原生层级。'
+                : parentSource === 'body'
+                  ? '父子这一条：房层读回时标明关系写在票正文里的一行「上级地图：票号」上（来源：正文），这个后端读不出原生父子字段，所以落点是「正文行」而不是原生层级；阻塞那一条仍只看契约返回的字段。'
+                  : blockedFromBody
+                    ? '被阻塞这一条：房层读回时标明关系写在票正文末尾的「## Blocked by」小节上（来源：正文），这个后端读不出阻塞边的结构字段，所以落点是「正文行」而不是原生字段；父子那一条仍只看契约返回的字段。'
+                    : '这两个落点是从契约返回的字段读出来的；要精确知道这个后端把父子放在原生层级还是平级链接，看返回里本次写操作留下的 evidence（deck_map_link 会写）。',
             },
             comments: Array.isArray(issue.comments) ? issue.comments.slice(0, first) : [],
             dependenciesRaw: dependencies,
