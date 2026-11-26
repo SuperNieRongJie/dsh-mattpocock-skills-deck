@@ -21,6 +21,8 @@ import { GITEE_READ_TIMEOUT_MS, GITEE_SLOW_READ_TIMEOUT_MS } from '../../../../s
 import { failGitee } from '../errors.js'
 import { requestIssueCreate, requestIssueUpdate, requestMilestones } from '../requests.js'
 import { normalizeIssue } from '../model/normalize.js'
+import type { GiteeIssue } from '../model/normalize.js'
+import { withParentLine } from '../model/parent-line.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoNameOf, repoRefId } from '../support/repo-ref.js'
 import { WAYFINDER_MAP_LABEL, toCanonical, toRemote } from '../support/label-alias.js'
@@ -106,6 +108,54 @@ function normalizePatchReply(
   return { ok: true, issue: normalizeIssue(parsed) }
 }
 
+/** 读回一张票并归一；读失败回 null（调用方据此区分「没读回来」与「读回来了、边不在」）。 */
+async function readBackIssue(effective: GiteeCtx, refId: string, key: string): Promise<GiteeIssue | null> {
+  try {
+    const raw = await fetchIssueRaw(effective, refId, key)
+    return raw.ok ? (normalizeIssue(raw.bag) as GiteeIssue) : null
+  } catch (err) {
+    return null
+  }
+}
+
+/**
+ * 结构字段没生效之后的正文兜底：把 `上级地图：#父票` 一行写进正文，再读回一次确认。
+ *
+ * 为什么非要再读一次：这次写正文的入参同样只是「我打算写什么」，不是「盘上有什么」。
+ * 回包成功而读回里没有这条父子时，如实说「结构字段没生效、写进正文也没读回来」。
+ */
+async function writeParentBodyLine(
+  effective: GiteeCtx,
+  refId: string,
+  issue: Issue,
+  parent: string,
+): Promise<{ ok: true; issue: GiteeIssue } | { ok: false; message: string }> {
+  const body = withParentLine(issue.body, parent)
+  let writeProblem = ''
+  try {
+    const res = await requestIssueUpdate(
+      effective,
+      refId,
+      String(issue.key),
+      { repo: repoNameOf(refId), body },
+      GITEE_READ_TIMEOUT_MS,
+    )
+    const wrote = normalizePatchReply(res, '写父票正文失败')
+    if (!wrote.ok) {
+      const failure = wrote.result
+      writeProblem = (failure.ok === false && failure.error ? String(failure.error.message || '') : '') || '远端没给原因'
+    }
+  } catch (err) {
+    writeProblem = err instanceof Error ? err.message : String(err)
+  }
+  const back = await readBackIssue(effective, refId, String(issue.key))
+  if (back && back.parentKey === parent) return { ok: true, issue: back }
+  const reason = writeProblem
+    ? ('写正文这一步就失败了：' + writeProblem)
+    : '正文已经写了，但写后读回里没有这条父子'
+  return { ok: false, message: '远端结构字段没生效，写进票正文也没读回来（来源：正文）：' + reason }
+}
+
 /**
  * 建票。
  *
@@ -153,11 +203,27 @@ export async function createIssue(
     // Gitee 的建票回包固定把 labels 写成空数组，哪怕标签已经写上了。直接把它交给
     // 调用方，面板会显示一张没有地目标签的票，看起来像又被静默丢弃了。这里补读一次
     // 单票，用远端的真实状态作回执；补读失败不影响建票结论，仍返回建票回包。
+    let created: Issue = reply.issue
     if (labels.length > 0) {
       const fresh = await fetchIssueRaw(effective, refId, reply.issue.key)
-      if (fresh.ok) return { ok: true, data: normalizeIssue(fresh.bag) }
+      if (fresh.ok) created = normalizeIssue(fresh.bag)
     }
-    return { ok: true, data: reply.issue }
+    if (input.parentKey) {
+      const parent = String(input.parentKey).trim()
+      // #8：parent_id 在个人仓库会被静默忽略（PATCH 回成功、读回来却没有父票）。
+      // 结构字段没生效时把关系写进正文，再读回确认；不能拿建票入参或回包自称当证据。
+      const first = await readBackIssue(effective, refId, reply.issue.key)
+      const current = first || created
+      if (current.parentKey === parent) return { ok: true, data: current }
+      const fallback = await writeParentBodyLine(effective, refId, current, parent)
+      if (fallback.ok) return { ok: true, data: fallback.issue }
+      // 票已经建成，这是「父子边没挂上」而不是「票没建成」：照 GitHub 房 parentError 的先例
+      // 把原因记在票上，让工具层按部分成功报出来，同时保住票号。
+      const withNote = created as Issue & { parentError?: { kind: string; message: string } }
+      withNote.parentError = { kind: 'write', message: fallback.message.slice(0, 300) }
+      return { ok: true, data: withNote }
+    }
+    return { ok: true, data: created }
   } catch (err) {
     return failGitee(err, 'create: gitee api 建票调用失败', err, effective)
   }
@@ -408,10 +474,19 @@ export async function setParent(
       GITEE_READ_TIMEOUT_MS,
     )
     const reply = normalizePatchReply(res, 'setParent: gitee api 挂父票失败')
+    // #8：不拿入参补 parentKey —— 写动作的自述不是证据。parent_id 在个人仓库会被静默忽略，
+    // 所以一律以写后读回为准；结构字段没生效就把关系写进正文，再读回确认。
+    const first = await readBackIssue(effective, refId, wantedKey)
+    if (first && first.parentKey === parent) return { ok: true, data: first }
+    // 改票请求本身失败时如实回它的原因：这时去写正文，只会用一个次要失败盖住真实原因。
     if (!reply.ok) return reply.result
-    // 回包里的 parent_url 才是远端的真相；parent_id 只是数字，不能当 parentKey 用。
-    if (!reply.issue.parentKey) reply.issue.parentKey = parent
-    return { ok: true, data: reply.issue }
+    const current = first || reply.issue
+    if (current) {
+      const fallback = await writeParentBodyLine(effective, refId, current, parent)
+      if (fallback.ok) return { ok: true, data: fallback.issue }
+      return failGitee(fallback.message, 'setParent: ' + fallback.message, parent)
+    }
+    return failGitee('parent write unverified', 'setParent: 写完既没读回票，也没有回包可补正文，这条父子边没挂上', parent)
   } catch (err) {
     return failGitee(err, 'setParent: gitee api 挂父票调用失败', err, effective)
   }

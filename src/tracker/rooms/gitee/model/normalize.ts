@@ -9,14 +9,20 @@
  *   · 没有 closed_at 字段，所以 closedAt 只能给 null，不拿 updated_at 冒充；
  *   · 没有拉取请求混在票列表里的问题（Gitee 的 issues 端点只回票），所以不设 isPullRequest。
  *
- * 父票只能从 parent_url 的尾段取（非纯数字才认）。原因：Gitee 只给父票的数字 id，
- * 而所有接口路径都要字符串票号，没有 id→票号的查询端点；与其编一个数字当 parentKey，
+ * 父票有两个来源，优先级固定：远端结构字段（parentKey 或 parent_url 尾段）有值就以它为准；
+ * 结构字段没有时，才从正文开头那行 `上级地图：#票号` 解析回来（Gitee 的 parent_id 会被静默忽略，
+ * 写侧因此把关系同时写进正文，见 model/parent-line.ts）。结构字段为什么只认非纯数字尾段：Gitee 只给
+ * 父票的数字 id，而所有接口路径都要字符串票号，没有 id→票号的查询端点；与其编一个数字当 parentKey，
  * 不如给 null 并让上层写一行退化日志。
+ *
+ * 来源随票一起交给上层（parentSource）：调用方要能说清「这条父子是远端结构给的，还是正文兜底来的」，
+ * 否则写后读回只能证明 parentKey 有值，分不出远端到底认没认 parent_id。
  */
 import type { Comment, Issue, Label, Milestone } from '../../../contract/entities.js'
 import type { Actor, IssueType, State } from '../../../contract/identity.js'
 import { ISSUE_TYPE, STATE } from '../../../contract/vocabulary.js'
 import { markerKindInHeader } from '../../../../shared/issue-file/src/marker.js'
+import { parentKeyFromBody } from './parent-line.js'
 import { normalizeColor } from '../../../../shared/label-color/src/colors.js'
 import { isMapLabel, toCanonical } from '../support/label-alias.js'
 
@@ -165,10 +171,25 @@ function keyFromParentUrl(raw: unknown): string | null {
   return tail
 }
 
-function deriveParentKey(bag: Record<string, unknown>): string | null {
+/** 父票的来源：远端结构字段，或者票正文里那行兜底文字。 */
+export type ParentSource = 'structure' | 'body'
+
+/** 归一后的票多挂一格来源。契约的 Issue 没有这一列，写法照 GitHub 房挂 parentError 的先例。 */
+export type GiteeIssue = Issue & { parentSource?: ParentSource }
+
+/**
+ * 推出父票票号与它的来源。结构字段优先；结构字段没有值时才读正文，两边都没有就给 null。
+ *
+ * 为什么不让正文盖过结构字段：结构字段是远端的真账，正文可能是人手写的旧行；
+ * 结构字段有值时以它为准，正文只在结构字段读不出来时兜底。
+ */
+function deriveParent(bag: Record<string, unknown>, body: string): { key: string | null; source: ParentSource | null } {
   const direct = bag['parentKey']
-  if (typeof direct === 'string' && direct.trim()) return direct.trim()
-  return keyFromParentUrl(bag['parent_url'])
+  const structural = (typeof direct === 'string' && direct.trim()) ? direct.trim() : keyFromParentUrl(bag['parent_url'])
+  if (structural) return { key: structural, source: 'structure' }
+  const fromBody = parentKeyFromBody(body)
+  if (fromBody) return { key: fromBody, source: 'body' }
+  return { key: null, source: null }
 }
 
 /**
@@ -183,7 +204,8 @@ export function normalizeIssue(raw: unknown): Issue {
   const body = bodyOf(bag)
   const state = deriveState(bag)
   const key = deriveKey(bag)
-  const issue: Issue = {
+  const parent = deriveParent(bag, body)
+  const issue: GiteeIssue = {
     key,
     effortId: '',
     type: deriveType(bag, body, labels),
@@ -194,13 +216,15 @@ export function normalizeIssue(raw: unknown): Issue {
     createdAt: str(bag['created_at']) || str(bag['createdAt']),
     updatedAt: str(bag['updated_at']) || str(bag['updatedAt']) || str(bag['created_at']) || str(bag['createdAt']),
     closedAt: null,
-    parentKey: deriveParentKey(bag),
+    parentKey: parent.key,
     labels,
     assignees: normalizeAssignees(bag),
     comments: normalizeComments(bag['comments']),
     blockedBy: [],
     reason: state === STATE.CLOSED ? (str(bag['state']).trim().toLowerCase() || 'closed') : '',
   }
+  // 只有真读出父票时才写来源：父票为 null 时写一个来源，会让上层以为「有父票但读不出来」。
+  if (parent.source) issue.parentSource = parent.source
   const author = normalizeActor(bag['user'])
   if (author) issue.author = author
   const milestone = normalizeMilestone(bag['milestone'])
