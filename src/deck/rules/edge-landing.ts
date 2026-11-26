@@ -182,6 +182,45 @@ export function blockedByLineRefersTo(body: unknown, key: unknown): boolean {
 }
 
 /**
+ * 从票正文里读出父票行的票号（`上级地图：#票号`），存量写法 `上级地图：[标题](链接)` 也认。
+ *
+ * 为什么规则层自己再写一份：Gitee 房里的同一份解析在 src/tracker/rooms/gitee/model/parent-line.ts，
+ * 但 deck 的纯规则层与房间之间隔着契约公开面，规则层不能 import 房间实现。两份约定必须逐字一致，
+ * 由 tests/verify-8-gitee-parent-body.ts 用同一批夹具把两边对齐；改一边就必须改另一边。
+ *
+ * 为什么只看开头 20 行：正文中段引用别的票、贴日志都可能出现票号，整篇模糊搜索会把「提到」
+ * 误判成「父子关系写着」。
+ */
+export function parentLineOf(body: unknown): string | null {
+  const text = str(body)
+  if (!text) return null
+  const lines = text.split(/\r?\n/)
+  const limit = Math.min(lines.length, 20)
+  for (let i = 0; i < limit; i++) {
+    const line = lines[i].trim()
+    if (line.indexOf('上级地图：') !== 0) continue
+    const rest = line.slice('上级地图：'.length).trim()
+    const plain = /^#([^\s#]+)$/.exec(rest)
+    if (plain) return plain[1].trim()
+    const linked = /^\[[^\]]*\]\(\s*(\S+?)\s*\)$/.exec(rest)
+    if (linked) {
+      const m = /\/issues\/([^\/?#]+)\/?$/.exec(linked[1])
+      if (m) {
+        let tail = m[1]
+        try {
+          tail = decodeURIComponent(tail)
+        } catch (e) {
+          // 链接编码坏了就按原样用；票号本来就只该是字母数字。
+        }
+        tail = tail.trim()
+        if (tail && !/^[0-9]+$/.test(tail)) return tail
+      }
+    }
+  }
+  return null
+}
+
+/**
  * 写完之后读回一次，判这一条边落在哪一列。判据只有两样：契约返回的结构字段、票的正文。
  *
  * 阻塞边能判得更细，靠的是一条真实的证据：**这条依赖在不在票的正文里**。
@@ -239,9 +278,18 @@ export function classifyEdgeLanding(op: string, target: unknown, after: unknown,
       ? '写后读回：票 #' + owner + ' 的 blockedBy 里没有 #' + want + '，正文里也没找到指向 #' + want + ' 的一行'
       : '写后读回：结构字段与正文里都没找到指向 #' + want + ' 的这条依赖' }
   }
-  if (rel.parentKey === want) return { kind: 'contract', ok: true, text: owner
-    ? '写后读回：票 #' + owner + ' 的父票是 #' + want + '（契约把父子放在 parentKey 这一列，分不出原生层级还是平级链接）'
-    : '写后读回：票的 parentKey = ' + want + '（契约把父子放在这一列，分不出原生层级还是平级链接）' }
+  if (rel.parentKey === want) {
+    // 票自己标了来源时，父子边才判得到「远端结构」还是「正文兜底」这一层。
+    // 没标来源的后端（GitHub / GitLab / 本地 Markdown）文案逐字不变，避免动它们的既有判据。
+    const parentFrom = issueObj !== null ? str(issueObj['parentSource']) : ''
+    if (parentFrom === 'body' && parentLineOf(body) === want) return { kind: 'body-line', ok: true, text: owner
+      ? '写后读回：票 #' + owner + ' 的父票是 #' + want + '；远端结构字段没生效，已写进票正文（来源：正文）'
+      : '写后读回：票的父票是 #' + want + '；远端结构字段没生效，已写进票正文（来源：正文）' }
+    const source = parentFrom === 'structure' ? '（来源：结构）' : ''
+    return { kind: 'contract', ok: true, text: (owner
+      ? '写后读回：票 #' + owner + ' 的父票是 #' + want + '（契约把父子放在 parentKey 这一列，分不出原生层级还是平级链接）'
+      : '写后读回：票的 parentKey = ' + want + '（契约把父子放在这一列，分不出原生层级还是平级链接）') + source }
+  }
   // 父子边同理：正文里写「归属 #78」不是这条边落上的证据（#790 里正是这一条把没挂上的边报成了挂上）。
   if (bodyHas) return { kind: 'missing', ok: true, text: owner
     ? '写后读回：票 #' + owner + ' 的父票不是 #' + want + '（正文里出现了指向 #' + want + ' 的一行，但正文提到票号不等于这条边落上了）'

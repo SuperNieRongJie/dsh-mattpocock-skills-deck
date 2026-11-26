@@ -33,8 +33,13 @@ export const GITEE_CAPABILITY_REGISTER = {
   setLabels: { tier: 'provided' },
   // Gitee 的认领人是单值 assignee：0 个清空、1 个直接写、2 个以上如实回 unsupported，不假装成功。
   setAssignees: { tier: 'provided' },
-  // 挂父票走 parent_id；但 swagger 没有任何「移到根」的写法，传 null 只能如实回 unsupported。
-  setParent: { tier: 'provided' },
+  // 挂父票先 PATCH parent_id，再写后读回；个人仓库实测 parent_id 会被静默忽略（回成功、读回没有父票），
+  // 所以结构字段没生效时把关系写成正文里一行「上级地图：#票号」，读侧再解析回来。移回根仍做不到。
+  setParent: {
+    tier: 'partial',
+    gap: '远端 parent_id 会被静默忽略（个人仓库实测写后读回没有父票），只能靠正文里「上级地图：#票号」一行兜底；传 null 要移回根时，远端没有这种写法，仍做不到。',
+    ticket: '8',
+  },
   // 与 getDependencies 同一条原因：没有阻塞边端点，写不了。
   setBlockedBy: { tier: 'unsupported-by-design', stubBy: 'backend' },
   // GET /user 直接给出当前登录人。

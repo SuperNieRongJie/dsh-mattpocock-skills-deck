@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-26T06:05:17.423Z",
+  "generatedAt": "2026-11-26T15:31:46.987Z",
   "generatedBy": "node scripts/gate-map.mts",
-  "chainLength": 604,
-  "gateCount": 604,
-  "attributedGates": 548,
+  "chainLength": 605,
+  "gateCount": 605,
+  "attributedGates": 549,
   "unattributedGates": 56,
   "buildOutputOnlyGates": 21,
   "completionRecordedGates": 145,
   "smokeLength": 8,
   "smokeCompletionRecordedGates": 5,
-  "graphFileCount": 992,
+  "graphFileCount": 993,
   "gates": [
     {
       "step": "node tests/verify-1207-splice-ts.ts",
@@ -8741,6 +8741,40 @@
       "reason": "归属来自：载入模块（require / import / pathToFileURL） 2 条；源码里的路径字面量 10 条"
     },
     {
+      "step": "node tests/verify-8-gitee-parent-body.ts",
+      "file": "tests/verify-8-gitee-parent-body.ts",
+      "guards": [
+        "src/deck/rules/edge-landing.ts",
+        "src/deck/tools/issue-create.ts",
+        "src/deck/tools/issue-get.ts",
+        "src/refresh/kernel/host-budget.ts",
+        "src/refresh/kernel/tool-call-budget.ts",
+        "src/refresh/rooms/host/quota-ledger.ts",
+        "src/refresh/rooms/host/refresh-gate.ts",
+        "src/shared/issue-file/src/marker.ts",
+        "src/tracker/registry/core.ts",
+        "src/tracker/rooms/gitee/index.ts",
+        "src/tracker/rooms/gitee/model/parent-line.ts",
+        "tests/lib/deck-decide-stub.ts"
+      ],
+      "dirs": [
+        "src/deck/rules",
+        "src/deck/tools",
+        "src/refresh/kernel",
+        "src/refresh/rooms/host",
+        "src/shared/issue-file/src",
+        "src/tracker/registry",
+        "src/tracker/rooms/gitee",
+        "src/tracker/rooms/gitee/model",
+        "tests/lib"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": false,
+      "expectedAssertions": 0,
+      "reason": "归属来自：载入模块（require / import / pathToFileURL） 1 条；源码里的路径字面量 11 条"
+    },
+    {
       "step": "node tests/verify-818-version-control-view.ts",
       "file": "tests/verify-818-version-control-view.ts",
       "guards": [
@@ -15098,6 +15132,7 @@
       "node tests/verify-1413-map-plan-two-layer.ts",
       "node tests/verify-1507-create-strict.ts",
       "node tests/verify-1832-single-triage-state.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-suggest-next-steps.ts",
       "node tests/verify-time-config.ts"
     ],
@@ -15184,6 +15219,7 @@
       "node tests/verify-723-gate-wiring.ts",
       "node tests/verify-784-effortId.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-895-bulk-deadline.ts",
       "node tests/verify-898-block-merge.ts",
@@ -15436,6 +15472,7 @@
       "node tests/verify-723-gate-wiring.ts",
       "node tests/verify-784-effortId.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-895-bulk-deadline.ts",
       "node tests/verify-898-block-merge.ts",
@@ -15641,6 +15678,7 @@
       "node tests/verify-729-force-dedup.ts",
       "node tests/verify-784-effortId.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-839-credential-exec.ts",
       "node tests/verify-847-stall-watch.ts",
@@ -15740,7 +15778,8 @@
       "node tests/verify-1091-original-words.ts",
       "node tests/verify-1092-original-words-roundtrip.ts",
       "node tests/verify-1277-md-spec-container.ts",
-      "node tests/verify-1489-progress.ts"
+      "node tests/verify-1489-progress.ts",
+      "node tests/verify-8-gitee-parent-body.ts"
     ],
     "src/shared/label-color": [],
     "src/shared/label-color/src": [
@@ -15998,6 +16037,7 @@
       "node tests/verify-723-gate-wiring.ts",
       "node tests/verify-784-effortId.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-895-github-memo.ts",
       "node tests/verify-929-batch-cycle.ts",
@@ -16023,9 +16063,13 @@
       "node tests/verify-prompts.ts"
     ],
     "src/tracker/rooms/gitee": [
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-gh-gateway.ts",
       "node tests/verify-gitee-client-login-detect.ts",
       "node tests/verify-gitee-room-shape.ts"
+    ],
+    "src/tracker/rooms/gitee/model": [
+      "node tests/verify-8-gitee-parent-body.ts"
     ],
     "src/tracker/rooms/github": [
       "node tests/verify-no-mixed-session.ts",
@@ -16561,6 +16605,7 @@
       "node tests/verify-784-effortId.ts",
       "node tests/verify-786-focus-end.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-818-version-control-view.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-841-write-phones.ts",
@@ -16665,12 +16710,12 @@
   },
   "coverage": {
     "sourceRoot": "src",
-    "fileCount": 1015,
+    "fileCount": 1016,
     "dirCount": 110,
-    "coveredFileCount": 1015,
+    "coveredFileCount": 1016,
     "ungatedFileCount": 0,
     "ungatedDirCount": 0,
-    "dedicatedDirCount": 81,
+    "dedicatedDirCount": 82,
     "guardedFiles": [
       "src/client/floating/Pop.ts",
       "src/client/floating/SkillFloatList.ts",
@@ -17462,6 +17507,7 @@
       "src/tracker/rooms/gitee/labels/colors.ts",
       "src/tracker/rooms/gitee/labels/list.ts",
       "src/tracker/rooms/gitee/model/normalize.ts",
+      "src/tracker/rooms/gitee/model/parent-line.ts",
       "src/tracker/rooms/gitee/model/repo-identity.ts",
       "src/tracker/rooms/gitee/preflight.ts",
       "src/tracker/rooms/gitee/project/init-project.ts",
@@ -17856,6 +17902,7 @@
       "src/tracker/registry",
       "src/tracker/rooms",
       "src/tracker/rooms/gitee",
+      "src/tracker/rooms/gitee/model",
       "src/tracker/rooms/github",
       "src/tracker/rooms/github/channels/graphql",
       "src/tracker/rooms/github/channels/rest",
@@ -17954,10 +18001,6 @@
       },
       {
         "path": "src/tracker/rooms/gitee/labels",
-        "fileCount": 2
-      },
-      {
-        "path": "src/tracker/rooms/gitee/model",
         "fileCount": 2
       },
       {

@@ -1,15 +1,17 @@
 # Gitee 后端能力登记表
 
 第四间房（Gitee）的能力登记。登记口径与另外三份相同：**明确提供功能**——今天就能干活；
+**做了但没做到位**——能写、但远端的结构字段靠不住，要另走一条兜底写法；
 **明确不支持**——形态不合、永远不会有；**当前不支持、未来会开发**——说得通、今天没做。
 本表逐条对照实现写，不估。
 
 实现真源：`src/tracker/rooms/gitee/index.ts`（工厂 23 个成员）+ 各实现文件；成对的登记数据是
 `src/tracker/rooms/gitee/support/capability-register.ts`。名录上的 27 条 = 24 条操作 + 3 条定位口，
-其中 23 条真提供、4 条按设计明确不支持。四条不支持的能力不靠房间自己造桩：注册表会替缺失的操作补桩，
+其中 22 条明确提供功能（19 条操作 + 3 条定位口）、1 条做了但没做到位（`setParent`：父票的结构字段
+会被静默忽略，改用正文兜底）、4 条按设计明确不支持。四条不支持的能力不靠房间自己造桩：注册表会替缺失的操作补桩，
 房间再造一个就成了两处说法。
 
-## 操作（24 条中：20 条明确提供功能、4 条明确不支持）
+## 操作（24 条中：19 条明确提供功能、1 条做了但没做到位、4 条明确不支持）
 
 | 能力 | 登记 | 依据 |
 |---|---|---|
@@ -24,7 +26,7 @@
 | update | 明确提供功能 | `issues/write.ts` 只把真改了的字段放进 PATCH，空补丁不发请求；里程碑按名字在远端查 id，清空里程碑没有可用写法时如实回不支持。 |
 | setLabels | 明确提供功能 | `issues/write.ts` 把整串标签名字交给 `PATCH`，是覆盖式写：传空数组就是清空。 |
 | setAssignees | 明确提供功能 | `issues/write.ts` 按 Gitee 的单值 `assignee` 处理：0 个清空、1 个直接写、2 个以上如实回不支持，不假装成功。 |
-| setParent | 明确提供功能 | `issues/write.ts` 先把父票的字符串票号读成内部数字 id，再 PATCH `parent_id`；传 null 要「移到根」时 swagger 里没有这种写法，只能如实回不支持。 |
+| setParent | 做了但没做到位 | `issues/write.ts` 先把父票的字符串票号读成内部数字 id，再 PATCH `parent_id`，然后读回核对；个人仓库实测这个字段会被静默忽略（回成功、读回没有父票），所以结构字段没生效时把关系写成正文里一行 `上级地图：#票号`，读侧再从正文解析回来并标出来源「正文」；结构字段真有值时来源标「结构」。传 null 要「移到根」时 swagger 里没有这种写法，只能如实回不支持。 |
 | setBlockedBy | 明确不支持 | 与 getDependencies 同一条原因：Gitee 没有阻塞边端点，写不了，属于形态不合。 |
 | getCurrentUser | 明确提供功能 | `repo/current-user.ts` 读 `GET /user`，登录人取回包里的 `login` 字段，没有就不拿展示名顶上。 |
 | initProject | 明确提供功能 | `project/init-project.ts` 先 `POST /user/repos` 建远端仓库，再依次做本地 git 初始化、配 origin、首次提交与推送，远端失败与本地 git 失败分开报。 |
@@ -49,7 +51,7 @@
 ## 这一房与另外三房不一样的四处
 
 - **票号是字符串**：Gitee 的票号形如 I8A2BC，所有接口路径里的 `{number}` 都用它，房间从不自己拼数字；票面上另有内部数字 id，只在 `parent_id` 这类需要数字的字段里用。
-- **父票读回只能尽力**：Gitee 只给父票的内部数字 id，没有 id 到票号的查询端点，所以 `parentKey` 只在 `parent_url` 尾段本身是非数字票号时才填，否则给 null 并留一行退化日志——不编一个数字冒充票号。
+- **父票靠正文兜底**：Gitee 只给父票的内部数字 id，没有 id 到票号的查询端点；个人仓库还会把改票时的 `parent_id` 静默忽略。所以写侧在结构字段没生效时，把关系写成票正文里一行 `上级地图：#票号`；读侧优先认结构字段，读不出来才解析正文，并在票上标出来源（结构 / 正文）。`parentKey` 仍只在 `parent_url` 尾段本身是非数字票号时才从结构字段填——不编一个数字冒充票号，也不把「写动作回了成功」当成边挂上了。
 - **认领人是单值**：契约允许传多人，Gitee 只有 `assignee` 一格；两人以上如实回不支持，不做「只写第一个」的静默降级。
 - **读限额没有通道**：CLI 自己会跟 `X-RateLimit-*`，但 `gitee api` 的输出不透出响应头，所以 `readBudget` 登记为按设计不支持，而不是回一个 0。
 
@@ -61,5 +63,6 @@
 
 ## 变更
 
+- 2026-11-26：`setParent` 从「明确提供功能」下调为「做了但没做到位」（#8）：个人仓库实测 `parent_id` 会被静默忽略，改为结构字段 + 正文 `上级地图：#票号` 一行兜底，读侧解析并在票上标出来源；建票时带父票也走同一条兜底，挂不上时票照建、票上记下原因。表头与上面「父票靠正文兜底」一条同步改写。
 - 2026-11-16：本表随 Gitee 房首次交付落地，按协调者给定的档位逐条登记：20 条操作明确提供功能、4 条操作明确不支持、3 条定位口全部提供。
 - 2026-11-16：房间接进装配点与判定顺序（`src/tracker/registry/builtins.ts`、`src/tracker/detection/backendDecision.ts`、`src/tracker/capability-assertions.ts` 与两条门禁同步），`docs/agents/issue-tracker.md` 里写 `# Issue tracker: Gitee` 从此能被认成显式声明（`src/tracker/kernel/issue-tracker-declaration.ts`），界面四个词条 `setup.gitee.*` 落地（`config/copy/panel.yaml` 加 `src/client/kernel/locale-data.ts` 重算）。

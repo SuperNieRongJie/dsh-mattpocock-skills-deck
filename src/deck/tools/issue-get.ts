@@ -422,6 +422,9 @@ export function createDeckIssueGet(deps?: DeckIssueGetDeps) {
         ? ('阻塞别人 ' + rel.blocking.length + ' 条' + (dependencies && dependencies.blockingComplete === false ? '（可能不全，见注记）。' : '。'))
         : '阻塞别人未取（blocking=false）。'
       const brief = issueBrief(issue)
+      // #8：有的后端读不出原生父票字段，改用票正文里一行「上级地图：票号」兜底；房层读回时用
+      // parentSource 说明这条关系是从哪儿读出来的。抬头与落点都按这个标注走，没标就不替它猜。
+      const parentSource = issue && typeof issue === 'object' ? (issue as { parentSource?: unknown }).parentSource : undefined
       // #1828：正文只装一处。只读某一节时 data.body 只报档位、全文长度与指纹，节原文放 data.section.text；
       // 全文 + 指定节时正文已在 chunks，section 只报节名，不再重复节原文。
       const sectionMode = bodyMode === 'excerpt' && sectionFound
@@ -436,7 +439,7 @@ export function createDeckIssueGet(deps?: DeckIssueGetDeps) {
       return {
         value: {
           status: DECK_STATUS.OK,
-          text: '票 ' + key + ' 读回来了：状态 ' + stateText + closedText + '，父票 ' + (rel.parentKey || '（没有）') + '，被阻塞 ' + rel.blockedBy.length + ' 条，' + blockingText + statusSentenceOf(issue as Record<string, unknown>),
+          text: '票 ' + key + ' 读回来了：状态 ' + stateText + closedText + '，父票 ' + (rel.parentKey ? rel.parentKey + (parentSource === 'body' ? '（来源：正文）' : parentSource === 'structure' ? '（来源：结构）' : '') : '（没有）') + '，被阻塞 ' + rel.blockedBy.length + ' 条，' + blockingText + statusSentenceOf(issue as Record<string, unknown>),
           data: {
             ticket: brief,
             body: bodyPayload,
@@ -444,10 +447,15 @@ export function createDeckIssueGet(deps?: DeckIssueGetDeps) {
             section: sectionPayload,
             relations: rel,
             landings: {
-              // 读路径只知道「契约的字段里有这条关系」，分不出原生层级与平级链接，如实降一档（判据见 shell.js）。
-              parent: rel.parentKey ? EDGE_LANDING.CONTRACT_PARENT_FIELD : EDGE_LANDING.UNKNOWN,
+              // 来源标注说「正文」时，父子关系写在这张票正文的一行「上级地图：票号」里，不是原生层级，
+              // 落点如实记成「正文行」；说「结构」或没标来源时仍按契约的父子列记，分不出层级就如实降一档。
+              parent: rel.parentKey ? (parentSource === 'body' ? EDGE_LANDING.BODY_LINE : EDGE_LANDING.CONTRACT_PARENT_FIELD) : EDGE_LANDING.UNKNOWN,
               blockedBy: rel.blockedBy.length ? EDGE_LANDING.CONTRACT_BLOCK_FIELD : EDGE_LANDING.UNKNOWN,
-              caveat: '这两个落点是从契约返回的字段读出来的；要精确知道这个后端把父子放在原生层级还是平级链接，看返回里本次写操作留下的 evidence（deck_map_link 会写）。',
+              // 房层已经明确说是正文兜底时，不能再讲「读路径只知道契约字段里有这条关系」——
+              // 那是「来源不明」时的说法，这里来源是已知的。
+              caveat: parentSource === 'body'
+                ? '父子这一条：房层读回时标明关系写在票正文里的一行「上级地图：票号」上（来源：正文），这个后端读不出原生父子字段，所以落点是「正文行」而不是原生层级；阻塞那一条仍只看契约返回的字段。'
+                : '这两个落点是从契约返回的字段读出来的；要精确知道这个后端把父子放在原生层级还是平级链接，看返回里本次写操作留下的 evidence（deck_map_link 会写）。',
             },
             comments: Array.isArray(issue.comments) ? issue.comments.slice(0, first) : [],
             dependenciesRaw: dependencies,
