@@ -129,7 +129,7 @@ export const listFilterRowNode = function (h: any, st: any, colorOf: any, sorted
         e.stopPropagation()
         liquidInkRemember(e.currentTarget, k, 'state')
         if (deckView && typeof deckViewCommand === 'function') deckViewCommand(st, 'setStateFilter', k)
-        else { st.stateFilter = k; listPrefs.stateFilter = k; saveListPrefs('stateFilter'); emit(st) }
+        else { st.stateFilter = k; emit(st) }
       }, style: { cursor: 'pointer', marginRight: 4, marginBottom: 3, fontSize: 10, background: on ? STATE_INK_BG : 'rgba(255,255,255,.06)', color: on ? ((typeof CONTAINER_ACCENT === 'object' && CONTAINER_ACCENT) ? CONTAINER_ACCENT.map : '') : 'var(--dsw-alias-label-secondary,#a1a1aa)', border: '1px solid ' + (on ? STATE_INK_BD : 'rgba(255,255,255,.15)') } }), tr('list.state.' + k))
     }),
     h('span', { style: { width: 1, height: 12, background: 'var(--dsw-alias-border-l1,#2a2d35)', margin: '0 4px 3px', flex: 'none' } }),

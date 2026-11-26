@@ -8,19 +8,24 @@
  *   待写队列（viewFlagState.journal / viewFlagState.deferred / viewFlagScheduleWrite），以及设置视图
  *   那一份的文档工具与状态对象（kernel/settings-view.ts、kernel/settings-view-state.ts）。
  *
- * 本片管「界面偏好」这三格：列表面板的状态筛选（stateFilter）、排序键（sortKey）、排序方向（sortDir）。
+ * 本片管「界面偏好」这两格：列表的排序键（sortKey）与排序方向（sortDir）。
  *   它们从前只活在 localStorage 的 dsws.listPrefs 里，现在新家是本机设置文件的 ui 节 —— #1012 要改的
  *   三份配置之一。旧键那一条留着当过渡，读先看文件、写进文件成功就不写旧键，与观看状态（settings-view.ts
  *   那一族）同一套先立后破的办法；等界面偏好这一趟稳了，旧键再单独立票退役。
  *
+ * 状态筛选（stateFilter）从 #6 起不在这一片里，也不再落盘：它只是「这一次开着面板时看哪一档」，
+ *   每次新建会话一律从「全部」开始。从前它和排序一起写进同一份机器共用偏好，结果在任何一个项目里点过
+ *   一次「已关闭」，之后每个项目打开都停在已关闭档、看不到开放票（2026-11-26 维护者选 A：不跨会话保留）。
+ *   设置核仍然认得老文件里的这一格（读得进来、不报错），但读出来就丢掉，写出去的一份里没有它。
+ *
  * 与观看状态的两处不同，改之前先读懂：
- *   一、这三格不是按工作区记的，整台机器只有一份（文件里就是 ui 节那三格）。所以队列里 ui 那几笔没有
+ *   一、这两格不是按工作区记的，整台机器只有一份（文件里就是 ui 节那两格）。所以队列里 ui 那几笔没有
  *      工作区路径，只有格名；它在队列里的记号以 \u0000ui\u0000 开头，与工作区那几笔（根路径 + \u0000 +
  *      格名）区分开 —— 工作区路径里不可能出现 \u0000，两族记号不会撞上。
- *   二、读这一侧不能只答「文件里写过没有」：文件里这三格可能是空的（空串＝这台机器还没写过这一格），
+ *   二、读这一侧不能只答「文件里写过没有」：文件里这两格可能是空的（空串＝这台机器还没写过这一格），
  *      那时候仍然照旧表里那一份答；文件写过的格以文件为准。文件里的空串不是「用户选了空」，是「没写过」。
  *
- * 文件里那一份到手时，界面已经按旧表那一份画过一次了（排序与筛选是建会话时就定下的）。所以文档到手
+ * 文件里那一份到手时，界面已经按旧表那一份画过一次了（排序是建会话时就定下的）。所以文档到手
  *   那一刻要把文件里那一份搬进内存（settingsUiAdoptFromDoc），而且只搬「本次会话还没动过」的那些面板：
  *   面板上这一格若与旧表那一份不同，说明用户在这一次开着的窗口里点过它，不能拿文件里的旧值把它顶回去。
  *   搬完重画一次，界面跟着换成文件里那一份。
@@ -45,15 +50,16 @@ declare function viewFlagEmitAll(...args: any[]): any;
 declare function settingsViewLoad(...args: any[]): any;
 declare function viewFlagScheduleWrite(...args: any[]): any;
 declare function viewFlagSubscribe(...args: any[]): any;
-    // 这三格的名字与核（config-store-core/src/settings.ts 的 UI_KEYS）同一份。labelClicks 不在此列：
+    // 这两格的名字与核（config-store-core/src/settings.ts 的 UI_KEYS）同一份。labelClicks 不在此列：
     //   维护者 2026-10-12 拍板它不落盘（见 kernel/store-prefs.js 里那一段注释），核也不写它。
-    const UI_PREF_NAMES = ['stateFilter', 'sortKey', 'sortDir']
+    //   stateFilter 同样不在此列（#6）：它是会话里的看法，不是要跨会话记住的偏好；核只为读老文件认得它。
+    const UI_PREF_NAMES = ['sortKey', 'sortDir']
     // 文件里那一份搬进内存这件事只做一次（一次问话只有一个终点，做完就放下，后续以内存这一份为准）。
     let uiPrefAdopted = false
     // 「上一次我们确认过的这一格是什么」—— 只用来在提交时判断用户到底动过哪几格（见 saveUiPrefs）。
     //   起点是旧表那一份：文档还没到手时旧表就是唯一知道的真相；文档到手搬完之后内存这一份就是真相，
     //   跟着更新；每交出去一笔也跟着更新。它记的是「上次确认过的值」，不是「文件里现在是什么」。
-    const uiPrefKnown: any = { stateFilter: listPrefs.stateFilter, sortKey: listPrefs.sortKey, sortDir: listPrefs.sortDir }
+    const uiPrefKnown: any = { sortKey: listPrefs.sortKey, sortDir: listPrefs.sortDir }
     // 队列里 ui 那几笔的记号：见文件头第一条（工作区路径里不可能出现 \u0000，所以两族不会撞）。
     const settingsUiJournalKeyOf = function (name: any): any { return '\u0000ui\u0000' + name }
     // 把一格界面偏好改进内存文档的 ui 节：别的节与别的格一律不动；ui 节缺失或形状不对就新建一份空的。
@@ -70,7 +76,7 @@ declare function viewFlagSubscribe(...args: any[]): any;
     const settingsUiLogDocFail = function (): void {
       try { log('warn', 'storage.fail', { key: 'settings.ui', op: 'write' }) } catch (eL) {}
     }
-    // 这一笔没能进文件时的过渡兜底：照改动前的老办法把整份三格写回旧键。旧键那一份住在 store-prefs.js
+    // 这一笔没能进文件时的过渡兜底：照改动前的老办法把整份排序偏好写回旧键。旧键那一份住在 store-prefs.js
     //   （saveListPrefsLegacy），本片不自己拼那把键，免得同一把键的写法长出第二处。
     const settingsUiLegacyWrite = function (): void {
       try { if (typeof saveListPrefsLegacy === 'function') saveListPrefsLegacy() } catch (e) {}
@@ -161,8 +167,8 @@ declare function viewFlagSubscribe(...args: any[]): any;
       } catch (e) { return false }
     }
     // 这一趟要交出去哪几格。调用方点名的优先（列表面板点一下改的就是它写的那几格，见 views/ListTab.js：
-    //   点筛选改 stateFilter，点排序一次改 sortKey 与 sortDir 两格）；没点名时按「与上次确认过的值不同」推。
-    //   为什么绝不能整份三格都交：文档还在路上时，没被动过的那两格带的是旧表那一份（这一刻内存还没被文件里
+    //   点排序一次改 sortKey 与 sortDir 两格）；没点名时按「与上次确认过的值不同」推。
+    //   为什么绝不能整份都交：文档还在路上时，没被动过的那一格带的是旧表那一份（这一刻内存还没被文件里
     //   那一份换过），文档一到手就会把文件里另外两格较新的值顶掉并落盘 —— 用户在另一个窗口刚选好的排序
     //   会被静默改回默认（2026-10-12 复核 Q4 用两个窗口复现：窗口 A 选 name/desc，窗口 B 开窗那一刻点筛选，
     //   文件里的 sortKey 被写成 number）。没点名的调用方按记账推，同样只交动过的格。
@@ -177,7 +183,7 @@ declare function viewFlagSubscribe(...args: any[]): any;
       return out
     }
     // 把用户动过的那几格交给文件（列表面板点一下筛选或排序时调的就是这里，见 views/ListTab.js）。
-    //   整批先验一遍再动：三格里有一格接不下（名字不在列、值是空串、文档形状对不上）就一格都不写，
+    //   整批先验一遍再动：这两格里有一格接不下（名字不在列、值是空串、文档形状对不上）就一格都不写，
     //   返回 false 让调用方整份写回旧键 —— 免得出现「文件里有 A、旧键里有 A+B」两份打架的真相。
     //   传参 changed 可以是格名或格名数组；不传时按记账推（见上面那个函数）。
     export const saveUiPrefs = function (changed: any): any {

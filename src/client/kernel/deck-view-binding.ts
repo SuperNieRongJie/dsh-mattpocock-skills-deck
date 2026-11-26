@@ -377,18 +377,17 @@ export function deckProjectionOf(st: any, scopeOverride?: DeckViewScope): any {
   try { return deckViewOf(st, scopeOverride).slice('projection').snapshot } catch (e) { return (st && st.snapshot) ? st.snapshot : null }
 }
 
-/** 把筛选命令写回会话存储（界面别的角落还按 st 字段读，镜像保持同步），并按旧口径持久化列表偏好。 */
+/** 把筛选命令写回会话存储（界面别的角落还按 st 字段读，镜像保持同步）；排序照旧持久化。
+ *  状态筛选不写偏好（#6）：它只是这一次开着面板时看哪一档，换会话就回「全部」，见 kernel/settings-ui.ts。 */
 function deckMirrorFilters(st: any, filters: any, command: string, scope: DeckViewScope): void {
   if (!st || !filters) return
   st.stateFilter = filters.stateFilter; st.lblFilters = filters.lblFilters.slice(); st.effFilters = filters.effFilters.slice()
   st.sortKey = filters.sortKey; st.sortDir = filters.sortDir; st.expLabels = filters.expLabels
   const prefs = scope.listPrefs
   if (prefs) {
-    if (command === 'setStateFilter') { prefs.stateFilter = filters.stateFilter }
     if (command === 'setSort') { prefs.sortKey = filters.sortKey; prefs.sortDir = filters.sortDir }
   }
   try {
-    if (command === 'setStateFilter' && scope.saveListPrefs) scope.saveListPrefs('stateFilter')
     if (command === 'setSort' && scope.saveListPrefs) scope.saveListPrefs(['sortKey', 'sortDir'])
   } catch (e) {}
 }

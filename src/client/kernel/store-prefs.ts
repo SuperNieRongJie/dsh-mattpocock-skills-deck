@@ -26,25 +26,35 @@ declare function h(...args: any[]): any;
 export const DEFAULT_PANEL_H: number = (function (): number {
   try { return Math.max(240, Math.round((window.innerHeight || 800) * 0.5)) } catch (e) { return 400 }
 })()
-// #374：主列表偏好（排序/状态过滤）持久化（localStorage 不可用时降级默认值）。
+// #374：主列表偏好（排序键/排序方向）持久化（localStorage 不可用时降级默认值）。
 //   默认排序档是「编号升序」：第一次打开面板的人直接看到按编号从小到大排好的列表，不用先点一次排序就能理解顺序。
 //   这是规格 #1354 有意保留的现状，不是漏写（#1357 决定不改成「最近更新在前」）；以后想改默认值需要另行讨论，不能顺手改这里。
+// #6（2026-11-26 维护者选 A）：状态筛选（stateFilter）不在这份持久化偏好里。它只是「这一次开着面板时看哪一档」，
+//   每次新建会话一律从「全部」开始；从前它跟着排序一起落盘、而且整台机器共用一份，结果是在任何一个项目里点过
+//   一次「已关闭」，之后每个项目打开都停在已关闭档、看不到开放票。旧键里可能还留着这一格，读的时候直接丢掉。
 export const LIST_PREFS_KEY: string = 'dsws.listPrefs'
 export const listPrefs: any = (function (): any {
-  const d: any = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+  const d: any = { sortKey: 'number', sortDir: 'asc' }
   try {
     const raw: any = localStorage.getItem(LIST_PREFS_KEY)
-    if (raw) return Object.assign(d, JSON.parse(raw))
+    if (raw) {
+      const saved: any = JSON.parse(raw)
+      if (saved && typeof saved === 'object') {
+        if (typeof saved.sortKey === 'string' && saved.sortKey) d.sortKey = saved.sortKey
+        if (typeof saved.sortDir === 'string' && saved.sortDir) d.sortDir = saved.sortDir
+      }
+    }
   } catch (e) { try { log('warn', 'storage.fail', { key: LIST_PREFS_KEY, op: 'read' }) } catch (eL) {} }
   return d
 })()
-// #1012 第 3 步：这三格的新家是本机设置文件的 ui 节，读写那一趟住在 kernel/settings-ui.js。
+// #1012 第 3 步：这两格的新家是本机设置文件的 ui 节，读写那一趟住在 kernel/settings-ui.js。
 //   下面这一条是改动前的老办法（整份写回旧键），只在那条新路接不下时兜底；过渡期里还写旧键的只此一处。
 export const saveListPrefsLegacy = function (): void { try { localStorage.setItem(LIST_PREFS_KEY, JSON.stringify(listPrefs)) } catch (e) { try { log('warn', 'storage.fail', { key: LIST_PREFS_KEY, op: 'write' }) } catch (eL) {} } }
-// 列表面板上点一下筛选或排序调的就是这里：先交给文件这条路（写进去了就不写旧键，先立后破），
+// 列表面板上点一下排序调的就是这里：先交给文件这条路（写进去了就不写旧键，先立后破），
 //   接不下（文档问不到、是更高版本、或形状对不上）才照老办法整份写回旧键。
+//   状态筛选不经过这里（#6）：它只改当前会话的 st.stateFilter，换会话就回「全部」。
 //   changed 是「这一下改的是哪几格」，由调用方点名往下传（见 views/ListTab.js）：只把动过的格交给文件，
-//   没动过的格不许跟着一起提交 —— 文档还在路上时它们带的是旧表那一份，交上去会把文件里另外两格较新的值
+//   没动过的格不许跟着一起提交 —— 文档还在路上时它们带的是旧表那一份，交上去会把文件里另外几格较新的值
 //   顶掉并落盘（2026-10-12 复核 Q4 用两个窗口复现的缺陷）。不传时由 kernel/settings-ui.js 按记账推，
 //   结果一样是「只交动过的格」。
 export const saveListPrefs = function (changed: any): any { try { if (typeof saveUiPrefs === 'function' && saveUiPrefs(changed) === true) return } catch (e) {} saveListPrefsLegacy() }

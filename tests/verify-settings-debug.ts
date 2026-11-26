@@ -557,7 +557,7 @@ async function main(): Promise<void> {
     //   「文件里没人开过」的默认关把用户刚拨的开丢掉，文件也永远不会长出这一节。
     const home = makeHome('idle-nosec')
     fs.mkdirSync(path.dirname(settingsPathIn(home)), { recursive: true })
-    fs.writeFileSync(settingsPathIn(home), 'version: 1\nui:\n  stateFilter: open\n  sortKey: ""\n  sortDir: ""\n  labelClicks: {}\nworkspaces: {}\ntemplates: {}\n', 'utf8')
+    fs.writeFileSync(settingsPathIn(home), 'version: 1\nui:\n  sortKey: number\n  sortDir: asc\n  labelClicks: {}\nworkspaces: {}\ntemplates: {}\n', 'utf8')
     const env = makeEnv({ tag: 'idle-nosec', home: home })
     const before = await store.readLocalSettings(home, realIo)
     check(before.ok === true && before.value.debug && before.value.debug.enabled === false,
@@ -572,7 +572,7 @@ async function main(): Promise<void> {
     const onInFile = await waitFor(async () => { const d = await readDoc(env.home); return !!d && d.debug.enabled === true })
     check(onInFile, '文件里长出了 debug.enabled: true（这一下没丢）。', JSON.stringify(((await readDoc(env.home)) || {}).debug))
     const dOn = await readDoc(env.home)
-    check(!!dOn && dOn.ui && dOn.ui.stateFilter === 'open', '文件里别的节没被写坏（ui.stateFilter 还是 open）。', JSON.stringify(dOn && dOn.ui))
+    check(!!dOn && dOn.ui && dOn.ui.sortKey === 'number' && dOn.ui.stateFilter === undefined, '文件里别的节没被写坏（ui.sortKey 还是 number，状态筛选按 #6 不出现）。', JSON.stringify(dOn && dOn.ui))
     // 与第十一件事同一口径：这一档也先查过两笔待写真的记下了，这里再查它们被吃干净了。
     await quietAfter(env)
     checkNoPending(env, '这两笔待写也被文档到手那一趟吃干净了（定时器已停、三处待写都空）。')
@@ -616,7 +616,7 @@ async function main(): Promise<void> {
     // 二、写之前那次重读答半份文档：不许拿它当基底整份写回，别的几节要被保住。
     const home2 = makeHome('shell-base')
     const full = dbgDoc({ enabled: false, sampleRate: 1 })
-    full.ui.stateFilter = 'open'
+    full.ui.sortKey = 'number'
     full.workspaces = { 'D:\\proj': { subwsMarkAutoShown: false } }
     full.templates = { comment: 'hello' }
     await store.writeLocalSettings(full, home2, realIo)
@@ -632,8 +632,8 @@ async function main(): Promise<void> {
     })
     check(landed, '这一笔自己落了盘（工作区那一族的布尔格写回文件，别的节保住）。', JSON.stringify(((await readDoc(home2)) || {}).workspaces))
     const dShell = await readDoc(home2)
-    check(!!dShell && dShell.ui.stateFilter === 'open' && dShell.templates.comment === 'hello',
-      '半份文档没被当成基底：别的节（ui.stateFilter、templates.comment）原样还在，没被写成空值。',
+    check(!!dShell && dShell.ui.sortKey === 'number' && dShell.templates.comment === 'hello',
+      '半份文档没被当成基底：别的节（ui.sortKey、templates.comment）原样还在，没被写成空值。',
       JSON.stringify({ ui: dShell && dShell.ui, templates: dShell && dShell.templates }))
     // 三、第一趟问到真文档（debug 节是 {enabled: true, sampleRate: 0.25}），写之前那次重读答半份 {version:1}：
     //   #1802 起这一趟不再退回内存旧文档当基底整份写回，而是放弃这一趟、留着待写格等下一趟重试（重读答半份
@@ -675,7 +675,7 @@ async function main(): Promise<void> {
     //   就成了空值。修法是把判据收在收文档那一步，这一份连内存都不许进。
     const home4 = makeHome('half-first')
     const full4 = dbgDoc({ enabled: false, sampleRate: 1 })
-    full4.ui.stateFilter = 'open'
+    full4.ui.sortKey = 'number'
     full4.workspaces = { 'D:\\proj': { subwsMarkAutoShown: false } }
     full4.templates = { comment: 'hello' }
     await store.writeLocalSettings(full4, home4, realIo)
@@ -690,7 +690,7 @@ async function main(): Promise<void> {
     check(callsOf(env4, 'wf.setSettings').length === 0, '半份文档没被当基底写回文件（写电话一次都没调）。', String(callsOf(env4, 'wf.setSettings').length))
     checkNoPending(env4, '半份文档这一档也没留下待写与排期。')
     const d4 = await readDoc(home4)
-    check(!!d4 && d4.ui.stateFilter === 'open' && !!d4.workspaces['D:\\proj'] && d4.templates.comment === 'hello',
+    check(!!d4 && d4.ui.sortKey === 'number' && !!d4.workspaces['D:\\proj'] && d4.templates.comment === 'hello',
       '盘上文件原样还在：ui / workspaces / templates 三节都没被写成空值。', JSON.stringify({ ui: d4 && d4.ui, ws: d4 && d4.workspaces, tpl: d4 && d4.templates }))
     check(!!d4 && d4.debug.enabled === false, '文件里的 debug 节也没被这一下改动。', JSON.stringify(d4 && d4.debug))
   }

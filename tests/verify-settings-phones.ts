@@ -64,7 +64,7 @@ async function main() {
 
   const goodValue = {
     version: 1,
-    ui: { stateFilter: '', sortKey: '', sortDir: '', labelClicks: {} },
+    ui: { sortKey: '', sortDir: '', labelClicks: {} },
     workspaces: {},
     debug: { enabled: false, sampleRate: 1 },
     templates: {},

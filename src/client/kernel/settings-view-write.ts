@@ -294,7 +294,8 @@
         for (let i = 0; i < sentKeys.length; i++) {
           const d = viewFlagState.journal[sentKeys[i]]
           if (!d) continue
-          // 界面偏好那一族照改动前的老办法兜底：整份三格写回旧键 dsws.listPrefs（由 store-prefs.js 管那把键）。
+          // 界面偏好那一族照改动前的老办法兜底：整份排序两格写回旧键 dsws.listPrefs（由 store-prefs.ts 管那把键；
+          //   状态筛选按 #6 不落盘，这份兜底里也不会有它）。
           if (d.section === 'ui') { saveListPrefsLegacy(); continue }
           // 动作模板那一族照改动前的老办法兜底：整份写回旧键 dsws.templates（由 config.js 那一份管那把键）。
           if (d.section === 'templates') { tplLegacyWriteAll(); continue }

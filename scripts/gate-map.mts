@@ -460,7 +460,8 @@ export const COMPLETION_RECORDED_GATES: Record<string, number> = {
   'verify-log-switch-single-source': 35,
   'verify-settings-templates': 65,
   // 2026-10-29 #1612：删掉旧 bannerFolded 迁移后改写这一扇的采样格，单跑实测 217 条。
-  'verify-settings-view': 217,
+  // 2026-11-26 #6：状态筛选不再落盘，第十五/十六件事改用排序两格重写并补了断言，单跑实测 223 条。
+  'verify-settings-view': 223,
   // 2026-10-29 #1643：加了八条冒烟阶段的断言（并行执行器里冒烟跑没跑、跳过时明说原因、
   // 冒烟红而主链绿时整体仍红且分得清是哪段红，--list 在抽查档位下提前说明冒烟会被跳过），
   // 58 条是单跑实测得出的。

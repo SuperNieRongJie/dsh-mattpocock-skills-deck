@@ -59,12 +59,14 @@ async function main() {
     const stOut = stringifyConfig(st, 'settings')
     check(stOut.ok === true, 'C1 设置能拼', stOut.ok ? '' : stOut.message)
     const stBack = stOut.ok ? parseConfig(stOut.text, 'settings') : null
-    // labelClicks 不落盘（维护者 2026-10-12 拍板），所以往返只保证其余部分逐字不变：
-    // 值里那一项写出去时被丢掉，再读回来是空的。
+    // labelClicks 不落盘（维护者 2026-10-12 拍板）、stateFilter 不落盘（#6），所以往返只保证其余部分逐字不变：
+    //   这两项写出去时被丢掉，再读回来一项是空的、一项根本不出现。
     const stExpected = JSON.parse(JSON.stringify(st))
     stExpected.ui.labelClicks = {}
-    check(!!stBack && stBack.ok === true && JSON.stringify(stBack.value) === JSON.stringify(stExpected), 'C1 设置往返值不变（labelClicks 除外，它不落盘）', JSON.stringify(stBack))
+    delete stExpected.ui.stateFilter
+    check(!!stBack && stBack.ok === true && JSON.stringify(stBack.value) === JSON.stringify(stExpected), 'C1 设置往返值不变（labelClicks 与 stateFilter 除外，它们不落盘）', JSON.stringify(stBack))
     check(stOut.ok === true && stOut.text.indexOf('labelClicks') < 0, 'C1 写出去的一份里不写 labelClicks', stOut.ok ? stOut.text : '')
+    check(stOut.ok === true && stOut.text.indexOf('stateFilter') < 0, 'C1 写出去的一份里不写 stateFilter（#6：状态筛选每次打开回到「全部」，不落盘）', stOut.ok ? stOut.text : '')
     // #1641：设置页还没打开过的工作区先按名单路径记一条临时记录，记录上带 unopened: true。
     //   它只是说明，不是开关：写得出来、读得回来、往返值不变；缺省的 false 不写出这个标记。
     // #1640 起临时记录是稀疏的：只存 unopened 标记与用户真正点过的那几格（这里只有 statusBar），

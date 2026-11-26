@@ -44,7 +44,7 @@ export const DECK_SETTINGS_BUS_SLOT = '__dsh_mattskillsdeck_settings_bus__'
 
 const HEADER = ['# 本文件的注释由插件生成；你自己加的注释会在下次写入时被替换。']
 const COMMENT_UI = '# 界面偏好（本机全工作区默认生效）'
-const COMMENT_STATE = '# 主列表的状态过滤与排序'
+const COMMENT_STATE = '# 主列表的排序（状态筛选每次打开回到「全部」，不落盘，见 #6）'
 const COMMENT_WORKSPACES = '# 按工作区区分的观看状态（键 = 工作区根目录）'
 const COMMENT_STATUS_BAR = '# 胶囊状态栏：show 显示、hide 收起（收起后状态栏只剩一条折叠条）'
 const COMMENT_DECK_TOOLS = '# deck 工具箱：on 打开、off 关闭（关掉后模型工具、胶囊状态栏、右侧面板三处一起关）'
@@ -58,6 +58,8 @@ const COMMENT_TEMPLATES = '# 动作模板（空 = 用默认文本）'
 const TOP_KEYS = ['version', 'ui', 'workspaces', 'debug', 'templates']
 // labelClicks 只在「读」这一侧认得（老文件里可能已经写进去了，读出来不能报错），写出去的一份里没有它：
 // 维护者 2026-10-12 拍板这项不落盘——它只是标签 chip 排序用的热度，丢了不影响功能，没必要占文件。
+// stateFilter 同理（#6）：它只是「这一次开着面板时看哪一档」，不该跨会话、更不该整台机器共用一份，
+// 所以只为读老文件认得这个名字，读出来就丢掉，写出去的一份里也没有它（2026-11-26 维护者选 A）。
 const UI_KEYS = ['stateFilter', 'sortKey', 'sortDir', 'labelClicks']
 // workspaces 每条记录认的名字：三个开关（statusBar、deckTools、suggest）、两个旧布尔开关（noRepoDismissed、
 // subwsMarkAutoShown），旧字段 bannerFolded（只为让旧文件读得进来；只换算「展开」那一种旧值，见 parseSettings），
@@ -239,12 +241,13 @@ export function parseSettings(doc: unknown): ConfigParseResult {
     templates[name] = tplRaw[name]
   }
 
+  // 归一后的 ui 只留「这一格要不要落盘」的名字：stateFilter 认得出（老文件能读），但归一之后不带它，
+  //   于是写出去的一份里自然没有这一行；labelClicks 同理。
   return {
     ok: true,
     value: {
       version: 1,
       ui: {
-        stateFilter: uiRaw['stateFilter'] === undefined ? '' : uiRaw['stateFilter'],
         sortKey: uiRaw['sortKey'] === undefined ? '' : uiRaw['sortKey'],
         sortDir: uiRaw['sortDir'] === undefined ? '' : uiRaw['sortDir'],
         labelClicks: clicks,
@@ -288,10 +291,10 @@ export function stringifySettings(value: unknown): ConfigStringifyResult {
   lines.push(COMMENT_UI)
   lines.push('ui:')
   lines.push('  ' + COMMENT_STATE)
-  lines.push('  stateFilter: ' + esc(String(ui['stateFilter'])))
   lines.push('  sortKey: ' + esc(String(ui['sortKey'])))
   lines.push('  sortDir: ' + esc(String(ui['sortDir'])))
-  // labelClicks 不写出去（理由见上面 UI_KEYS 旁的注释）。老文件里那一节在下次写入时自然消失。
+  // stateFilter 与 labelClicks 都不写出去（理由见上面 UI_KEYS 旁的注释）。
+  //   老文件里那两行在下次写入时自然消失。
   lines.push(COMMENT_WORKSPACES)
   const wsKeys = Object.keys(workspaces)
   if (wsKeys.length === 0) {
@@ -347,7 +350,7 @@ export function stringifySettings(value: unknown): ConfigStringifyResult {
 export function settingsEmptyDocument(): Record<string, unknown> {
   return {
     version: 1,
-    ui: { stateFilter: '', sortKey: '', sortDir: '', labelClicks: {} },
+    ui: { sortKey: '', sortDir: '', labelClicks: {} },
     workspaces: {},
     debug: { enabled: false, sampleRate: 1 },
     templates: {},

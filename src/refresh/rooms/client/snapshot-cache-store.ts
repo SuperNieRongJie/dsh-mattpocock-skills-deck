@@ -58,9 +58,10 @@ export const makeStore = (): any => ({
   cwd: '', lblFilters: [], effFilters: [], expLabels: false, expEfforts: false,
   // 由 wf.cwd 带回来的工作区根（2026-09-19 加）：归属标志的早到来源，收下与写表在 probe-snapshot.js。
   sessionWorkspaceRoot: '',
-  // 状态过滤 + 排序：默认档是「编号升序」，来自内核 listPrefs 的初始偏好（见 store-prefs）；
-  //   面板每次换档写回同一处，下次启动沿用。
-  stateFilter: ((typeof listPrefs !== 'undefined' ? listPrefs : {}) as any).stateFilter, sortKey: ((typeof listPrefs !== 'undefined' ? listPrefs : {}) as any).sortKey, sortDir: ((typeof listPrefs !== 'undefined' ? listPrefs : {}) as any).sortDir,
+  // 状态过滤 + 排序：排序键/方向来自内核 listPrefs 的持久化偏好；状态筛选不跨会话保留（#6），
+  //   每个新会话一律从「全部」开始 —— 从前它跟着排序落盘、整台机器共用一份，在别处点过「已关闭」
+  //   就会让这里每个项目打开都停在已关闭档。
+  stateFilter: 'all', sortKey: ((typeof listPrefs !== 'undefined' ? listPrefs : {}) as any).sortKey, sortDir: ((typeof listPrefs !== 'undefined' ? listPrefs : {}) as any).sortDir,
   chainSnapshot: null, chainLoadedAt: '', backendChain: null, fullChain: null,
   snapMode: 'loading', snapError: null, snapErrorRaw: '', snapLoading: false,
   // #727 / #1767：后端那条事实的读取状态。selPending 只有一个主人——那条问后端的专用电话还在飞时

@@ -154,7 +154,7 @@ function workspaceRecord(statusBar, deckTools) {
 function docWithWorkspaces(workspaces, ui) {
   return {
     version: 1,
-    ui: Object.assign({ stateFilter: '', sortKey: '', sortDir: '', labelClicks: {} }, ui || {}),
+    ui: Object.assign({ sortKey: '', sortDir: '', labelClicks: {} }, ui || {}),
     workspaces: workspaces,
     debug: { enabled: false, sampleRate: 1 },
     templates: {},
@@ -243,18 +243,19 @@ function makeEnv(o) {
   const host = opts.noHost ? undefined : makeHost(phones, calls, { before: opts.onCall })
   const st = { cwd: cwd, sessionWorkspaceRoot: root, subs: [], tick: 0 }
   const seedText = ls.getItem('dsws.listPrefs')
-  let seedPrefs = { stateFilter: 'all', sortKey: 'number', sortDir: 'asc' }
+  let seedPrefs = { sortKey: 'number', sortDir: 'asc' }
   if (seedText) {
     try {
       const parsed = JSON.parse(seedText)
-      if (parsed && typeof parsed === 'object') seedPrefs = parsed
+      if (parsed && typeof parsed === 'object') seedPrefs = { sortKey: parsed.sortKey || 'number', sortDir: parsed.sortDir || 'asc' }
     } catch (e) {}
   }
   const shared = {
     cwd: '',
     subs: [],
     tick: 0,
-    stateFilter: seedPrefs.stateFilter || 'all',
+    // #6：状态筛选不落盘，会话与 shared 一律从「全部」起步，不读旧键里遗留的那一格。
+    stateFilter: 'all',
     sortKey: seedPrefs.sortKey || 'number',
     sortDir: seedPrefs.sortDir || 'asc',
   }
@@ -376,7 +377,7 @@ async function main() {
   await section('宿主：补丁只改点名的格', async function () {
     const home = makeHome('host-patch')
     const phones = makePhones(home, [])
-    const preset = docWithWorkspaces({ 'D:\\ilife': workspaceRecord('show', 'on'), 'D:\\other': workspaceRecord('show', 'on') }, { stateFilter: 'blocked' })
+    const preset = docWithWorkspaces({ 'D:\\ilife': workspaceRecord('show', 'on'), 'D:\\other': workspaceRecord('show', 'on') }, { sortKey: 'updatedAt' })
     await store.writeLocalSettings(preset, home, realIo)
     const before = await phones.handleGetSettings({})
     const patched = await phones.handleSetSettings({
@@ -391,8 +392,8 @@ async function main() {
       '文件里只改了补丁点名的那两格，值都落到了真盘上。', JSON.stringify(doc && doc.workspaces['D:\\ilife']))
     check(!!doc && !!doc.workspaces['D:\\other'] && doc.workspaces['D:\\other'].statusBar === 'show' && doc.workspaces['D:\\other'].deckTools === 'on',
       '补丁没有点名的工作区原样保留，没有被这份补丁碰到。', JSON.stringify(doc && doc.workspaces['D:\\other']))
-    check(!!doc && !!doc.ui && doc.ui.stateFilter === 'blocked',
-      '补丁没有点名的节（ui）也原样保留，没有按内存里的旧文档重写。', JSON.stringify(doc && doc.ui))
+    check(!!doc && !!doc.ui && doc.ui.sortKey === 'updatedAt',
+      '补丁没有点名的节（ui 的排序键）也原样保留，没有按内存里的旧文档重写。', JSON.stringify(doc && doc.ui))
     check(!!patched && typeof patched.contentHash === 'string' && !!doc && patched.contentHash === settingsCore.settingsContentHash(doc),
       '写成功的回包带的是写完之后这份文档的指纹，下一笔写可以拿它当基底。', JSON.stringify(patched && patched.contentHash))
   })

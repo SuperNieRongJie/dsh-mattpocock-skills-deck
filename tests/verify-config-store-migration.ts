@@ -120,7 +120,10 @@ async function main() {
     check(w.ok === true, '设置能写', JSON.stringify(w))
     check(mem.files.has('C:\\Users\\demo/.dsh/mattskillsdeck/settings.yaml'), '设置落在用户主目录下那一层', JSON.stringify([...mem.files.keys()]))
     const r = await readLocalSettings('C:\\Users\\demo', mem.io)
-    check(r.ok === true && JSON.stringify(r.value) === JSON.stringify(value), '设置读写往返一致', JSON.stringify(r.value))
+    // #6：stateFilter 不再落盘，写出去的一份里没有它，读回来也不带这一格；其余部分逐字一致。
+    const expected = JSON.parse(JSON.stringify(value))
+    delete expected.ui.stateFilter
+    check(r.ok === true && JSON.stringify(r.value) === JSON.stringify(expected), '设置读写往返一致（stateFilter 不落盘，读回来没有它）', JSON.stringify(r.value))
     // #1612：只带 bannerFolded 的旧文件读得进来（不判 unknown-keys），只换算「展开」那一种旧值，
     //   写完的一份里不再有旧字段。
     const legacyValue = {

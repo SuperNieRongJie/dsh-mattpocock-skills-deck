@@ -262,17 +262,18 @@ async function main() {
     const host = o.noHost ? undefined : makeHost(phones, calls, o.failMode, { before: o.onCall })
     const st = { cwd: cwd, sessionWorkspaceRoot: root, subs: [], tick: 0 }
     // 单例 shared 也是一个「还没被用户动过的面板」（store-snapshot.js:81 是 makeStore() 单独造的对象，
-    //   不在 stores 里）：建会话时照旧表那一份画。这三格必须在夹具里出现，才量得到「文件里那一份搬进
-    //   内存时 shared 也要跟着换」—— 2026-10-12 复核发现夹具里 shared 没有这三格，settings-ui.js 只换
+    //   不在 stores 里）：建会话时照旧表那一份画。排序两格必须在夹具里出现，才量得到「文件里那一份搬进
+    //   内存时 shared 也要跟着换」—— 2026-10-12 复核发现夹具里 shared 没有这两格，settings-ui.js 只换
     //   stores、漏掉 shared 的那个缺口在门禁里量不到。
+    //   状态筛选自 #6 起不落盘：真机上会话与 shared 一律从「全部」起步，不读旧键里遗留的那一格。
     const seedPrefs = (function () {
       try {
         const raw = o.localStorage && o.localStorage['dsws.listPrefs']
-        if (raw) { const p = JSON.parse(raw); return { stateFilter: p.stateFilter, sortKey: p.sortKey, sortDir: p.sortDir } }
+        if (raw) { const p = JSON.parse(raw); return { sortKey: p.sortKey, sortDir: p.sortDir } }
       } catch (e) {}
-      return { stateFilter: 'all', sortKey: 'number', sortDir: 'asc' }
+      return { sortKey: 'number', sortDir: 'asc' }
     })()
-    const shared = { cwd: '', subs: [], tick: 0, stateFilter: seedPrefs.stateFilter, sortKey: seedPrefs.sortKey, sortDir: seedPrefs.sortDir }
+    const shared = { cwd: '', subs: [], tick: 0, stateFilter: 'all', sortKey: seedPrefs.sortKey, sortDir: seedPrefs.sortDir }
     const stores = { 'sess-1': st }
     const logs = []
     // 内核那张「所选目录的键 → 工作区根」的表（store-snapshot.js 第 57–63 行的真口径：同一个工作区的
@@ -436,10 +437,10 @@ const wait = (env) => realSleep(300)
     check(env.mod.setViewFlag(cwd, 'subwsMarkAutoShown', true) === true, '在预置文件的基础上写本工作区这一格。')
     await wait(env)
     const doc = await readDoc(env.home)
-    // 标签点击次数不落盘（维护者 2026-10-12 拍板），所以「一个不动」的只有状态过滤与排序两项，
-    //   ui 节里那一项写出去时被丢掉，读回来是空的。
-    const uiExpected = { stateFilter: preset.ui.stateFilter, sortKey: preset.ui.sortKey, sortDir: preset.ui.sortDir, labelClicks: {} }
-    check(!!doc && JSON.stringify(doc.ui) === JSON.stringify(uiExpected), 'ui 节原样保留（状态过滤、排序一个不动；标签点击次数不落盘，写出去的一份里没有它）。', JSON.stringify(doc && doc.ui))
+    // 状态筛选按 #6 不落盘，标签点击次数按维护者 2026-10-12 的拍板也不落盘：
+    //   ui 节里这两项写出去时都被丢掉，读回来只剩排序两格。
+    const uiExpected = { sortKey: preset.ui.sortKey, sortDir: preset.ui.sortDir, labelClicks: {} }
+    check(!!doc && JSON.stringify(doc.ui) === JSON.stringify(uiExpected), 'ui 节原样保留（排序两格一个不动；状态筛选与标签点击次数不落盘，写出去的一份里没有它们）。', JSON.stringify(doc && doc.ui))
     check(!!doc && JSON.stringify(doc.debug) === JSON.stringify(preset.debug), 'debug 节原样保留（开关与采样率一个不动）。', JSON.stringify(doc && doc.debug))
     check(!!doc && JSON.stringify(doc.templates) === JSON.stringify(preset.templates), 'templates 节原样保留（用户自己写的模板文本一个不动）。', JSON.stringify(doc && doc.templates))
     check(!!doc && !!doc.workspaces['D:\\other'] && doc.workspaces['D:\\other'].statusBar === 'hide' && doc.workspaces['D:\\other'].deckTools === 'off' && doc.workspaces['D:\\other'].noRepoDismissed === true,
@@ -1061,176 +1062,193 @@ const wait = (env) => realSleep(300)
     check(env.mod.viewFlagOf(cwd, 'subwsMarkAutoShown') === true, '内存里也是 true —— 盘上与内存一致。')
   }
 
-  // ── 第十五件事：界面偏好那三格搬进本机设置文件的 ui 节（#1012 第 3 步） ──
+  // ── 第十五件事：排序两格搬进本机设置文件的 ui 节（#1012 第 3 步），状态筛选按 #6 不落盘 ──
   console.log('')
-  console.log('== 第十五件事：界面偏好（列表筛选/排序键/排序方向）搬进 ui 节，旧表 dsws.listPrefs 留着当过渡 ==')
+  console.log('== 第十五件事：排序两格搬进 ui 节，状态筛选每次打开回到「全部」、不落盘，旧表 dsws.listPrefs 留着当过渡 ==')
   {
-    // 文件里那一份与旧表那一份故意不同：文件里筛选是 blocked，旧表里是 all。
+    // 文件里那一份与旧表那一份故意不同：文件里排序是 title/desc，旧表里是 number/asc。
+    //   文件里还留着老版本插件写下的 stateFilter: blocked（设置核读得进来，但归一之后丢掉）。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const env = makeEnv({ tag: 'uipref-adopt', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) } })
-    const pre = await store.writeLocalSettings({ version: 1, ui: { stateFilter: 'blocked', sortKey: '', sortDir: '', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
-    check(pre && pre.ok === true, '先把一份设置文件放进临时主目录（文件里筛选是 blocked，旧表里是 all）。', JSON.stringify(pre))
-    // 摆两个面板：一个本会话已经动过（用户刚点了筛选），一个没动过（建会话时照旧表画的是 all）。
+    const pre = await store.writeLocalSettings({ version: 1, ui: { sortKey: 'title', sortDir: 'desc', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
+    check(pre && pre.ok === true, '先把一份设置文件放进临时主目录（文件里排序是 title/desc，旧表里是 number/asc）。', JSON.stringify(pre))
+    // 写文件这一侧已经不输出状态筛选了，这里手工把老版本那一行塞回 ui 节，量「老文件还能读、但读进来就丢掉」。
+    {
+      const file = settingsPathIn(env.home)
+      const text = fs.readFileSync(file, 'utf8')
+      fs.writeFileSync(file, text.replace(/^ui:$/m, 'ui:\n  stateFilter: blocked'), 'utf8')
+    }
+    // 摆两个面板：一个本会话已经动过（用户刚点了排序与筛选），一个没动过（建会话时照旧表画的是 number/asc）。
+    env.st.sortKey = 'createdAt'
     env.st.stateFilter = 'frontier'
     env.stores['sess-2'] = { cwd: cwd, sessionWorkspaceRoot: env.root, stateFilter: 'all', sortKey: 'number', sortDir: 'asc', tick: 0 }
     env.mod.settingsViewLoad()
     await waitFor(async () => env.mod.viewFlagReadyNow() === true)
-    check(env.mod.listPrefs.stateFilter === 'blocked', '文档到手后，内存这一份换成文件里那一格（文件写过就以文件为准）。', env.mod.listPrefs.stateFilter)
-    check(env.stores['sess-2'].stateFilter === 'blocked', '本会话还没动过的面板也跟着换成文件里那一份（建会话时它照旧表画的是 all）。', String(env.stores['sess-2'].stateFilter))
-    check(env.shared.stateFilter === 'blocked', '单例 shared 那块面板（还没有会话落定、面板先拿它画的那一份）也跟着换 —— 它不在 stores 里，漏了就会一直停在旧表那一份。', String(env.shared.stateFilter))
-    check(env.st.stateFilter === 'frontier', '本会话已经动过的面板不被文件里的旧值顶回去（用户刚点的那一下优先）。', String(env.st.stateFilter))
-    check(env.mod.listPrefs.sortKey === 'number' && env.mod.listPrefs.sortDir === 'asc', '文件里没写过的格（空串）保留旧表那一份 —— 空串的意思是「这台机器还没写过」，不是「用户选了空」。', JSON.stringify({ sortKey: env.mod.listPrefs.sortKey, sortDir: env.mod.listPrefs.sortDir }))
+    check(env.mod.listPrefs.sortKey === 'title' && env.mod.listPrefs.sortDir === 'desc', '文档到手后，内存这一份换成文件里那两格（文件写过就以文件为准）。', JSON.stringify({ sortKey: env.mod.listPrefs.sortKey, sortDir: env.mod.listPrefs.sortDir }))
+    check(env.stores['sess-2'].sortKey === 'title' && env.stores['sess-2'].sortDir === 'desc', '本会话还没动过的面板也跟着换成文件里那一份（建会话时它照旧表画的是 number/asc）。', JSON.stringify({ sortKey: env.stores['sess-2'].sortKey, sortDir: env.stores['sess-2'].sortDir }))
+    check(env.shared.sortKey === 'title' && env.shared.sortDir === 'desc', '单例 shared 那块面板（还没有会话落定、面板先拿它画的那一份）也跟着换 —— 它不在 stores 里，漏了就会一直停在旧表那一份。', JSON.stringify({ sortKey: env.shared.sortKey, sortDir: env.shared.sortDir }))
+    check(env.st.sortKey === 'createdAt', '本会话已经动过的面板不被文件里的旧值顶回去（用户刚点的那一下优先）。', String(env.st.sortKey))
+    check(env.mod.listPrefs.stateFilter === undefined, '状态筛选不在偏好这一份里（#6：它不再随文件搬回来）。', String(env.mod.listPrefs.stateFilter))
+    check(env.st.stateFilter === 'frontier' && env.stores['sess-2'].stateFilter === 'all' && env.shared.stateFilter === 'all',
+      '文件里遗留的 stateFilter: blocked 一行读得进来、但不进任何面板（读进来就丢掉，不把「已关闭」搬回来）。',
+      JSON.stringify({ st: env.st.stateFilter, sess2: env.stores['sess-2'].stateFilter, shared: env.shared.stateFilter }))
+    const readBack = await readDoc(env.home)
+    check(!!readBack && readBack.ui.stateFilter === undefined, '文件里遗留的状态筛选那一格不进读出来的文档（归一之后只留排序两格）。', JSON.stringify(readBack && readBack.ui))
   }
   {
-    // 点一下筛选或排序（列表面板调的就是 saveListPrefs）：写进文件这条路成了，旧键一个字节都不许动。
+    // 点一下排序（列表面板调的就是 saveListPrefs）：写进文件这条路成了，旧键一个字节都不许动。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const env = makeEnv({ tag: 'uipref-write', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) } })
     env.mod.settingsViewLoad()
     await waitFor(async () => env.mod.viewFlagReadyNow() === true)
-    env.mod.listPrefs.stateFilter = 'closed'
     env.mod.listPrefs.sortKey = 'updated'
-    env.mod.saveListPrefs()
-    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.stateFilter === 'closed' && d.ui.sortKey === 'updated' })
-    check(landed, '点一下筛选或排序：这两格真的落进了文件的 ui 节。', JSON.stringify((await readDoc(env.home)) || null))
+    env.mod.listPrefs.sortDir = 'desc'
+    env.mod.saveListPrefs(['sortKey', 'sortDir'])
+    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.sortKey === 'updated' && d.ui.sortDir === 'desc' })
+    check(landed, '点一下排序：这两格真的落进了文件的 ui 节。', JSON.stringify((await readDoc(env.home)) || null))
+    const fileText = fs.readFileSync(settingsPathIn(env.home), 'utf8')
+    check(fileText.indexOf('stateFilter') === -1, '新写出去的一份里没有状态筛选这一格（#6：它不再落盘）。', fileText)
     check(env.ls.getItem('dsws.listPrefs') === JSON.stringify(oldPrefs), '写进文件这条路走通了，就绝不再写旧键（旧键一个字节都没动）。', env.ls.getItem('dsws.listPrefs'))
-    check(env.mod.setUiPref('sortDir', 'desc') === true, '单独写一格也接得下来（返回 true 表示交给文件这条路了）。')
-    const landed2 = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.sortDir === 'desc' })
+    check(env.mod.setUiPref('sortDir', 'asc') === true, '单独写一格也接得下来（返回 true 表示交给文件这条路了）。')
+    const landed2 = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.sortDir === 'asc' })
     check(landed2, '这一格也落进了文件，而且别的格没有被带丢（合并着写，不是整份推平）。', JSON.stringify((await readDoc(env.home)) || null))
-    check(env.mod.setUiPref('labelClicks', '3') === false, '不在这三格里的名字一律不写文件（标签点击计数那一项按维护者拍板不落盘）。')
+    check(env.mod.setUiPref('stateFilter', 'closed') === false, '状态筛选已经不是能交给文件的偏好（返回 false，不落盘）。')
+    check(env.mod.setUiPref('labelClicks', '3') === false, '不在这两格里的名字一律不写文件（标签点击计数那一项按维护者拍板不落盘）。')
   }
   {
     // 写失败（手机自己坏了）：照改动前的老办法整份写回旧键，而且设置文件不许被建出来。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const env = makeEnv({ tag: 'uipref-fail', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) }, failMode: 'throw' })
     env.mod.settingsViewLoad()
     await waitFor(async () => env.mod.viewFlagReadyNow() === true)
     env.mod.listPrefs.sortDir = 'desc'
     check(env.mod.saveUiPrefs() === true, '写这一趟先按能写接下来（落盘失败再兜底）。')
     await wait(env)
-    check(env.ls.getItem('dsws.listPrefs') === JSON.stringify({ sortKey: 'number', sortDir: 'desc', stateFilter: 'all' }), '写失败之后这一次的值整份写回了旧键（过渡兜底，与改动前一致）。', env.ls.getItem('dsws.listPrefs'))
+    check(env.ls.getItem('dsws.listPrefs') === JSON.stringify({ sortKey: 'number', sortDir: 'desc' }), '写失败之后这一次的值整份写回了旧键（过渡兜底，旧键里遗留的状态筛选也一并丢掉）。', env.ls.getItem('dsws.listPrefs'))
     check(fs.existsSync(settingsPathIn(env.home)) === false, '写失败时设置文件没有被建出来（兜底不是「换一份假的写成功」）。')
   }
   {
     // 文档还在路上时点一下：先记着不写旧键（此刻写旧键，文档一到手就会拿文件里的旧值把刚点的那一下顶掉），
     //   等文档到手再并进文件。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const box = {}
     const env = makeEnv({
       tag: 'uipref-loading', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) },
       onCall: function (method) {
-        if (method === 'wf.getSettings' && !box.done) { box.done = true; env.mod.listPrefs.stateFilter = 'closed'; box.accepted = env.mod.saveUiPrefs() }
+        if (method === 'wf.getSettings' && !box.done) { box.done = true; env.mod.listPrefs.sortDir = 'desc'; box.accepted = env.mod.saveUiPrefs() }
       },
     })
     env.mod.settingsViewLoad()
-    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.stateFilter === 'closed' })
+    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.sortDir === 'desc' })
     check(box.accepted === true, '文档还在路上时点一下也接得下来（这一笔先记着，等文档到手再并进去）。')
     check(landed, '文档到手之后这一笔真的落进了文件（不是被丢掉，也不是只留在内存里）。')
+    check(fs.readFileSync(settingsPathIn(env.home), 'utf8').indexOf('stateFilter') === -1, '在途这一笔并进文件时，也没有顺手写出状态筛选那一格。')
     check(env.ls.getItem('dsws.listPrefs') === JSON.stringify(oldPrefs), '文档在路上时不写旧键（写了就会在文档到手那一刻被文件里的旧值顶掉）。', env.ls.getItem('dsws.listPrefs'))
   }
   {
     // 文件是更高版本插件写的（读不懂、也不许写回去）：这一族不接，交回调用方照老办法写旧键。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const env = makeEnv({ tag: 'uipref-readonly', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) } })
     fs.mkdirSync(path.dirname(settingsPathIn(env.home)), { recursive: true })
     fs.writeFileSync(settingsPathIn(env.home), 'version: 9\n', 'utf8')
     env.mod.settingsViewLoad()
     await waitFor(async () => env.mod.viewFlagReadyNow() === true)
-    check(env.mod.setUiPref('stateFilter', 'closed') === false, '文件是高版本时这一格不接（返回 false，调用方按老办法写旧键）。')
-    env.mod.listPrefs.stateFilter = 'closed'
-    env.mod.saveListPrefs()
-    check(env.ls.getItem('dsws.listPrefs') === JSON.stringify({ sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }), '不接之后照改动前的老办法整份写回旧键（这一次的改动没有丢）。', env.ls.getItem('dsws.listPrefs'))
+    check(env.mod.setUiPref('sortKey', 'title') === false, '文件是高版本时这一格不接（返回 false，调用方按老办法写旧键）。')
+    env.mod.listPrefs.sortKey = 'title'
+    env.mod.saveListPrefs('sortKey')
+    check(env.ls.getItem('dsws.listPrefs') === JSON.stringify({ sortKey: 'title', sortDir: 'asc' }), '不接之后照改动前的老办法整份写回旧键（这一次的改动没有丢，状态筛选不再写进去）。', env.ls.getItem('dsws.listPrefs'))
     await wait(env)
     check(fs.readFileSync(settingsPathIn(env.home), 'utf8').indexOf('version: 9') === 0, '高版本文件一个字节都没被改（不许拿读不懂的内容去覆盖）。')
   }
 
   // ── 第十六件事：界面偏好只交用户真动过的那几格（2026-10-12 复核 Q4 的必修） ──
-  //   老写法是「点一下就把内存里那三格整份交出去」。文档还在路上时，没被动过的那两格带的是旧表那一份
-  //   （这一刻内存还没被文件里那一份换过），文档一到手就把文件里另外两格较新的值顶掉并落盘 ——
+  //   老写法是「点一下就把内存里那几格整份交出去」。文档还在路上时，没被动过的那几格带的是旧表那一份
+  //   （这一刻内存还没被文件里那一份换过），文档一到手就把文件里另外几格较新的值顶掉并落盘 ——
   //   用户在另一个窗口刚选好的排序会被静默改回默认。这里量三档：两窗口、点名提交、以及「文件里那一格
   //   与旧表那一份恰好相等」不算动过（这一档原来是假绿：去掉实现里那一行守卫，门禁照样全绿）。
   console.log('')
   console.log('== 第十六件事：只把用户动过的那几格交给文件（没动过的格不许把文件里较新的值顶掉） ==')
   {
-    // 两个窗口：窗口 A 早把排序选成 name/desc 并落进了文件；窗口 B 开窗那一刻（文档还在路上）点了一下筛选。
+    // 两个窗口：窗口 A 早把排序选成 name/desc 并落进了文件；窗口 B 开窗那一刻（文档还在路上）点了一下排序方向。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const box = {}
     const env = makeEnv({
       tag: 'uipref-two-window', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) },
       onCall: function (method) {
         if (method === 'wf.getSettings' && !box.done) {
           box.done = true
-          env.mod.listPrefs.stateFilter = 'mine'
+          env.mod.listPrefs.sortDir = 'asc'
           // 列表面板点一下调的就是这个（saveListPrefs 是只管交出去、不回值的写口，见 store-prefs.js）。
-          env.mod.saveListPrefs('stateFilter')
+          env.mod.saveListPrefs('sortDir')
         }
       },
     })
-    const pre = await store.writeLocalSettings({ version: 1, ui: { stateFilter: '', sortKey: 'name', sortDir: 'desc', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
+    const pre = await store.writeLocalSettings({ version: 1, ui: { sortKey: 'name', sortDir: 'desc', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
     check(pre && pre.ok === true, '先摆好窗口 A 写下的那一份（文件里排序是 name/desc）。', JSON.stringify(pre))
     env.mod.settingsViewLoad()
     await waitFor(async () => env.mod.viewFlagReadyNow() === true)
-    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.stateFilter === 'mine' })
+    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.sortDir === 'asc' })
     const doc = await readDoc(env.home)
     check(box.done === true, '窗口 B 是在文档还在路上的那一刻点的（这一档才量得到交错）。')
     check(landed, '窗口 B 点的那一格真的落进了文件。', JSON.stringify(doc && doc.ui))
-    check(!!doc && doc.ui.sortKey === 'name' && doc.ui.sortDir === 'desc',
-      '文件里窗口 A 选的另外两格没被顶掉（没动过的格不许跟着一起提交）。', JSON.stringify(doc && doc.ui))
+    check(!!doc && doc.ui.sortKey === 'name',
+      '文件里窗口 A 选的排序键没被顶掉（没动过的格不许跟着一起提交）。', JSON.stringify(doc && doc.ui))
     check(env.ls.getItem('dsws.listPrefs') === JSON.stringify(oldPrefs), '这一趟同样不写旧键。', env.ls.getItem('dsws.listPrefs'))
   }
   {
     // 点名提交：传哪几格就只交哪几格（列表面板点一下排序一次改两格，见 views/ListTab.js）。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const env = makeEnv({ tag: 'uipref-named', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) } })
-    const pre = await store.writeLocalSettings({ version: 1, ui: { stateFilter: 'blocked', sortKey: 'name', sortDir: 'desc', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
-    check(pre && pre.ok === true, '先摆一份文件（筛选 blocked、排序 name/desc）。')
+    const pre = await store.writeLocalSettings({ version: 1, ui: { sortKey: 'name', sortDir: 'desc', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
+    check(pre && pre.ok === true, '先摆一份文件（排序 name/desc）。')
     env.mod.settingsViewLoad()
     await waitFor(async () => env.mod.viewFlagReadyNow() === true)
     env.mod.listPrefs.sortKey = 'title'
-    env.mod.listPrefs.sortDir = 'asc'
-    // saveListPrefs 不回值（只管把这一趟交出去，与改动前一致），所以这里量的是后果：两格都落进了文件。
-    env.mod.saveListPrefs(['sortKey', 'sortDir'])
-    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.sortKey === 'title' && d.ui.sortDir === 'asc' })
+    // saveListPrefs 不回值（只管把这一趟交出去，与改动前一致），所以这里量的是后果：点名那一格落进了文件。
+    env.mod.saveListPrefs(['sortKey'])
+    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.sortKey === 'title' })
     const doc = await readDoc(env.home)
-    check(landed, '这两格落进了文件。', JSON.stringify(doc && doc.ui))
-    check(!!doc && doc.ui.stateFilter === 'blocked', '没点名的那一格保持文件里那一份（点名提交不牵连别的格）。', JSON.stringify(doc && doc.ui))
+    check(landed, '点名的那一格落进了文件。', JSON.stringify(doc && doc.ui))
+    check(!!doc && doc.ui.sortDir === 'desc', '没点名的那一格保持文件里那一份（点名提交不牵连别的格）。', JSON.stringify(doc && doc.ui))
   }
   {
     // 文档还在路上时点了「当前就选着的那一格」（值恰好与旧表那一份相同）：也要交出去 —— 用户点过就以
     //   用户那一下为准。这一档同时把「格名真的传到了」钉住：若 saveListPrefs 把格名丢掉（退回按记账推），
-    //   这一格会因为「与上次确认过的值相同」不被提交，文件里另一个窗口写的 blocked 就把用户点的那一下顶掉。
+    //   这一格会因为「与上次确认过的值相同」不被提交，文件里另一个窗口写的 name 就把用户点的那一下顶掉。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const box = {}
     const env = makeEnv({
       tag: 'uipref-named-same', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) },
       onCall: function (method) {
-        if (method === 'wf.getSettings' && !box.done) { box.done = true; env.mod.saveListPrefs('stateFilter') }
+        if (method === 'wf.getSettings' && !box.done) { box.done = true; env.mod.saveListPrefs('sortKey') }
       },
     })
-    const pre = await store.writeLocalSettings({ version: 1, ui: { stateFilter: 'blocked', sortKey: '', sortDir: '', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
-    check(pre && pre.ok === true, '先摆一份文件：文件里筛选是 blocked，旧表（界面此刻显示的）是 all。')
+    const pre = await store.writeLocalSettings({ version: 1, ui: { sortKey: 'name', sortDir: 'desc', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
+    check(pre && pre.ok === true, '先摆一份文件：文件里排序键是 name，旧表（界面此刻显示的）是 number。')
     env.mod.settingsViewLoad()
     await waitFor(async () => env.mod.viewFlagReadyNow() === true)
     check(box.done === true, '这一档真的是在文档还在路上的那一刻点的（不然量不到「格名传没传到」这件事）。')
-    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.stateFilter === 'all' })
+    const landed = await waitFor(async () => { const d = await readDoc(env.home); return !!d && !!d.ui && d.ui.sortKey === 'number' })
     const doc = await readDoc(env.home)
     check(landed, '用户点的那一格赢了：文件里那一格改成用户点的值（点过就算数，不因为与旧表相同被当成没动过）。', JSON.stringify(doc && doc.ui))
+    check(!!doc && doc.ui.sortDir === 'desc', '这一档也没牵连另一格（排序方向仍是文件里的 desc）。', JSON.stringify(doc && doc.ui))
   }
   {
     // 文件里那一格与旧表那一份恰好相等：不算「用户动过」，不重画。这一档原来在门禁下没有任何断言把守
     //   （去掉实现里那一行守卫门禁照样全绿，复核点名的假绿），所以这里钉住「只重画一次」这个可观测后果。
     const cwd = 'D:\\ilife\\packages\\skill-calorie'
-    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'all' }
+    const oldPrefs = { sortKey: 'number', sortDir: 'asc', stateFilter: 'closed' }
     const env = makeEnv({ tag: 'uipref-equal', cwd: cwd, localStorage: { 'dsws.listPrefs': JSON.stringify(oldPrefs) } })
-    const pre = await store.writeLocalSettings({ version: 1, ui: { stateFilter: 'all', sortKey: 'number', sortDir: 'asc', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
-    check(pre && pre.ok === true, '先摆一份文件：三格与旧表那一份逐格相同。')
+    const pre = await store.writeLocalSettings({ version: 1, ui: { sortKey: 'number', sortDir: 'asc', labelClicks: {} }, workspaces: {}, debug: { enabled: false, sampleRate: 1 }, templates: {} }, env.home, realIo)
+    check(pre && pre.ok === true, '先摆一份文件：排序两格与旧表那一份逐格相同。')
     env.mod.settingsViewLoad()
     await waitFor(async () => env.mod.viewFlagReadyNow() === true)
     check(env.shared.tick === 1 && env.st.tick === 1, '文件里那一份与旧表逐格相同时不重画（只算「问话收口」那一次，搬那一趟不出第二次）。', JSON.stringify({ shared: env.shared.tick, st: env.st.tick }))
