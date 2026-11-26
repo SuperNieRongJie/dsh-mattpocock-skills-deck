@@ -17,8 +17,13 @@ export const GITEE_CAPABILITY_REGISTER = {
   list: { tier: 'provided' },
   // 单张票 + 按需读评论；Gitee 没有 closed_at，closedAt 如实给 null 而不拿更新时间冒充。
   get: { tier: 'provided' },
-  // Gitee 的 Open API 里没有任何阻塞边端点（relat/link 全部零命中），读不到也写不了，这是形态不合。
-  getDependencies: { tier: 'unsupported-by-design', stubBy: 'backend' },
+  // Gitee 的 Open API 里没有任何阻塞边端点（relat/link 全部零命中），只能读票正文末尾的
+  // `## Blocked by` 小节；反向「阻塞了谁」要把全仓票面扫一遍，所以可能不全。
+  getDependencies: {
+    tier: 'partial',
+    gap: 'Gitee 没有阻塞边的结构字段，被阻塞关系只能从票正文末尾的「## Blocked by」小节读回来；「阻塞了谁」要扫全仓票面，撞上翻页上限时可能不全，回执会如实标出来。',
+    ticket: '11',
+  },
   // 建票走 owner 级路径，仓库名放正文；没有幂等锚，idempotencyKey 照发但不产生去重效果（已写在实现注释里）。
   create: { tier: 'provided' },
   // 关票走 PATCH state=closed；Gitee 没有独立的关闭原因字段，opts.reason 原样记在返回实体上。
@@ -40,8 +45,13 @@ export const GITEE_CAPABILITY_REGISTER = {
     gap: '远端 parent_id 会被静默忽略（个人仓库实测写后读回没有父票），只能靠正文里「上级地图：#票号」一行兜底；传 null 要移回根时，远端没有这种写法，仍做不到。',
     ticket: '8',
   },
-  // 与 getDependencies 同一条原因：没有阻塞边端点，写不了。
-  setBlockedBy: { tier: 'unsupported-by-design', stubBy: 'backend' },
+  // 与 getDependencies 同一条原因：没有阻塞边端点，只能把整段关系写进票正文末尾的小节。
+  // 自阻塞与成环在写之前就拒；写后读回小节核对，读不回来就如实失败。
+  setBlockedBy: {
+    tier: 'partial',
+    gap: '阻塞关系只能写进票正文末尾的「## Blocked by」小节，靠人手改票面就能改动它，没有结构字段的保护；写后读回对不上时如实失败，不会报「已记上」。',
+    ticket: '11',
+  },
   // GET /user 直接给出当前登录人。
   getCurrentUser: { tier: 'provided' },
   // 建远端仓库 + 本地 git 初始化 + 首发推送；远端与本地两步失败分开报。

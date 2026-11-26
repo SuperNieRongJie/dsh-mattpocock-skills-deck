@@ -10,8 +10,10 @@
  * 每一层读不到都记一行 read.degraded，写明卡在哪一层——只回 false 的话，
  * 用户看到的是「没认出 Gitee」，却不知道是没文件、没权限、还是文件里写的是别的后端。
  *
- * 登记为「明确不支持」的四条（getDependencies / setBlockedBy / ensureLabelColorsFile / readBudget）
- * 故意不在工厂里造桩：注册表会替缺失的操作补桩，房间再造一个就成了两处说法、迟早不一致。
+ * 登记为「明确不支持」的两条（ensureLabelColorsFile / readBudget）故意不在工厂里造桩：
+ * 注册表会替缺失的操作补桩，房间再造一个就成了两处说法、迟早不一致。
+ * 阻塞关系（getDependencies / setBlockedBy）与父票一样登记成「做了但没做到位」：Gitee 没有
+ * 阻塞边的结构字段，只能把关系写进票正文末尾的 `## Blocked by` 小节再读回来，所以工厂里真的有这两条。
  */
 import type { BackendContext, OpContext, RepoHandle } from '../../contract/contexts.js'
 import type { RepositoryRef } from '../../contract/entities.js'
@@ -27,7 +29,10 @@ import { attachGiteeOpUsage } from './client.js'
 import { emitReadDegraded } from './support/read-log.js'
 import { getRepoKey, giteeOriginOf, learnGiteeOrigin } from './model/repo-identity.js'
 import { listIssues, getIssue } from './issues/read.js'
-import { createIssue, closeIssue, reopenIssue, updateIssue, setLabels, setAssignees, setParent } from './issues/write.js'
+import { createIssue, closeIssue, reopenIssue, updateIssue, setLabels, setAssignees } from './issues/write.js'
+import { setParent } from './issues/parent-write.js'
+import { getDependencies } from './issues/dependencies.js'
+import { setBlockedBy } from './issues/blocked-by.js'
 import { addComment } from './comments/write.js'
 import { counts } from './issues/counts.js'
 import { listPage } from './issues/pages.js'
@@ -181,6 +186,8 @@ export function createGiteeBackend(ctx: BackendContext) {
     setLabels: (repo, key, labels, opts, opCtx) => setLabels(ctx, repo, key, labels, opts, opCtx || ctx),
     setAssignees: (repo, key, assignees, opts, opCtx) => setAssignees(ctx, repo, key, assignees, opts, opCtx || ctx),
     setParent: (repo, key, parentKey, opts, opCtx) => setParent(ctx, repo, key, parentKey, opts, opCtx || ctx),
+    getDependencies: (repo, key, opts, opCtx) => getDependencies(ctx, repo, key, opts, opCtx || ctx),
+    setBlockedBy: (repo, key, blockers, opts, opCtx) => setBlockedBy(ctx, repo, key, blockers, opts, opCtx || ctx),
     counts: (repo, filter, opCtx) => counts(opCtx || ctx, repo, filter, opCtx || ctx),
     listPage: (repo, filter, opts, opCtx) => listPage(opCtx || ctx, repo, filter, opts, opCtx || ctx),
     listLabels: (repo, opCtx) => listLabels(opCtx || ctx, repo),

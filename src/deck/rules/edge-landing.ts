@@ -221,6 +221,56 @@ export function parentLineOf(body: unknown): string | null {
 }
 
 /**
+ * 规则层自己认一遍票正文末尾的「## Blocked by」小节，只取票号（#11）。
+ *
+ * 为什么规则层要再写一份解析：规则层不许 import 房间实现（房间可能带着远端请求与登记表），
+ * 而它必须能在没有房层附加标注时独立判断「正文里到底有没有这条关系」。两份解析是否对齐，
+ * 由 tests/verify-11-gitee-blockedby-body.ts 的夹具逐条对照，改一处必须同时改两处。
+ *
+ * 认三种条目（与房层 model/blocked-by-section.ts 相同）：规范「标题（#票号）」、存量「[标题](链接)」、裸「#票号」。
+ */
+export function blockedBySectionKeysOf(body: unknown): string[] {
+  const lines = String(body === null || body === undefined ? '' : body).split(/\r?\n/)
+  const keys: string[] = []
+  let inSection = false
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim()
+    if (/^#{1,6}\s/.test(line)) {
+      inSection = /^#{1,6}\s+blocked\s+by\s*[:：]?\s*$/i.test(line)
+      continue
+    }
+    if (!inSection) continue
+    const item = /^[-*+]\s+(.*)$/.exec(line)
+    if (!item) continue
+    let key = ''
+    const keyed = /[（(]\s*#([^\s#()（）]+)\s*[）)]\s*$/.exec(item[1])
+    if (keyed) key = keyed[1].trim()
+    if (!key) {
+      const link = /\]\(\s*(\S+?)\s*\)\s*$/.exec(item[1])
+      if (link) {
+        const m = /\/issues\/([^\/?#]+)\/?$/.exec(link[1])
+        if (m) {
+          let tail = m[1]
+          try {
+            tail = decodeURIComponent(tail)
+          } catch (e) {
+            // 链接编码坏了就按原样用；票号本来就只该是字母数字。
+          }
+          tail = tail.trim()
+          if (tail && !/^[0-9]+$/.test(tail)) key = tail
+        }
+      }
+    }
+    if (!key) {
+      const bare = /^#([^\s#]+)$/.exec(item[1].trim())
+      if (bare) key = bare[1].trim()
+    }
+    if (key && keys.indexOf(key) < 0) keys.push(key)
+  }
+  return keys
+}
+
+/**
  * 写完之后读回一次，判这一条边落在哪一列。判据只有两样：契约返回的结构字段、票的正文。
  *
  * 阻塞边能判得更细，靠的是一条真实的证据：**这条依赖在不在票的正文里**。
@@ -263,6 +313,13 @@ export function classifyEdgeLanding(op: string, target: unknown, after: unknown,
   // 父子边仍只认带标记的引用（`#NN`、`issues/NN`），它的正文写法本来就带标记。
   const bodyHas = op === 'block' ? (bodyRefersTo(body, want) || blockedByLineRefersTo(body, want)) : bodyRefersTo(body, want)
   if (op === 'block') {
+    // #11：Gitee 没有阻塞边的结构字段，房层读回时把来源标成 'body'；这时落点直接判「正文行」，
+    // 并按正文末尾的「## Blocked by」小节自证。没标来源的后端（GitHub / GitLab / 本地 Markdown）
+    // 不走这一支，文案与判据逐字不变。
+    const blockFrom = issueObj !== null ? str(issueObj['blockedBySource']) : ''
+    if (blockFrom === 'body' && blockedBySectionKeysOf(body).indexOf(want) >= 0) return { kind: 'body-line', ok: true, text: owner
+      ? '写后读回：票 #' + owner + ' 的 blockedBy 里有 #' + want + '，也就是 #' + owner + ' 被 #' + want + ' 阻塞；正文末尾的「## Blocked by」小节里也写着它（来源：正文，这个后端没有阻塞边的结构字段）'
+      : '写后读回：结构字段里有这条依赖，正文末尾的「## Blocked by」小节里也写着它（来源：正文，这个后端没有阻塞边的结构字段）' }
     const inField = rel.blockedBy.indexOf(want) >= 0
     if (inField && !bodyHas) return { kind: 'native', ok: true, text: owner
       ? '写后读回：票 #' + owner + ' 的 blockedBy 里有 #' + want + '，也就是 #' + owner + ' 被 #' + want + ' 阻塞；后端的结构字段里有这条依赖、正文里没有那一行（后端把它放在自己的原生边上）'

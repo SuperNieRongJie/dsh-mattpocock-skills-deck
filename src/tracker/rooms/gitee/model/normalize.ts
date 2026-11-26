@@ -17,11 +17,16 @@
  *
  * 来源随票一起交给上层（parentSource）：调用方要能说清「这条父子是远端结构给的，还是正文兜底来的」，
  * 否则写后读回只能证明 parentKey 有值，分不出远端到底认没认 parent_id。
+ *
+ * 被阻塞关系没有结构来源：Gitee 压根没有这个字段，所以它只能从正文末尾的 `## Blocked by` 小节读，
+ * 读到了就挂 blockedBySource = 'body'。契约的 Issue 没有来源这一列，所以这里只挂房层的附加属性，
+ * 契约字段 blockedBy 照旧是 IssueRef 数组，别处读 blockedBy 不用关心来源。
  */
 import type { Comment, Issue, Label, Milestone } from '../../../contract/entities.js'
 import type { Actor, IssueType, State } from '../../../contract/identity.js'
 import { ISSUE_TYPE, STATE } from '../../../contract/vocabulary.js'
 import { markerKindInHeader } from '../../../../shared/issue-file/src/marker.js'
+import { blockedByEntriesFromBody } from './blocked-by-section.js'
 import { parentKeyFromBody } from './parent-line.js'
 import { normalizeColor } from '../../../../shared/label-color/src/colors.js'
 import { isMapLabel, toCanonical } from '../support/label-alias.js'
@@ -174,8 +179,11 @@ function keyFromParentUrl(raw: unknown): string | null {
 /** 父票的来源：远端结构字段，或者票正文里那行兜底文字。 */
 export type ParentSource = 'structure' | 'body'
 
-/** 归一后的票多挂一格来源。契约的 Issue 没有这一列，写法照 GitHub 房挂 parentError 的先例。 */
-export type GiteeIssue = Issue & { parentSource?: ParentSource }
+/**
+ * 归一后的票多挂两格来源。契约的 Issue 没有这些列，写法照 GitHub 房挂 parentError 的先例。
+ * blockedBySource 只有 'body' 这一种取值：被阻塞关系在 Gitee 上只可能来自票正文。
+ */
+export type GiteeIssue = Issue & { parentSource?: ParentSource; blockedBySource?: 'body' }
 
 /**
  * 推出父票票号与它的来源。结构字段优先；结构字段没有值时才读正文，两边都没有就给 null。
@@ -205,6 +213,7 @@ export function normalizeIssue(raw: unknown): Issue {
   const state = deriveState(bag)
   const key = deriveKey(bag)
   const parent = deriveParent(bag, body)
+  const blockedBy = blockedByEntriesFromBody(body).map((entry) => ({ key: entry.key, title: entry.title }))
   const issue: GiteeIssue = {
     key,
     effortId: '',
@@ -220,11 +229,13 @@ export function normalizeIssue(raw: unknown): Issue {
     labels,
     assignees: normalizeAssignees(bag),
     comments: normalizeComments(bag['comments']),
-    blockedBy: [],
+    blockedBy,
     reason: state === STATE.CLOSED ? (str(bag['state']).trim().toLowerCase() || 'closed') : '',
   }
   // 只有真读出父票时才写来源：父票为 null 时写一个来源，会让上层以为「有父票但读不出来」。
   if (parent.source) issue.parentSource = parent.source
+  // 同理：没有这条关系时不写来源，否则上层会把「小节是空的」误读成「有阻塞但读不出来」。
+  if (blockedBy.length > 0) issue.blockedBySource = 'body'
   const author = normalizeActor(bag['user'])
   if (author) issue.author = author
   const milestone = normalizeMilestone(bag['milestone'])
