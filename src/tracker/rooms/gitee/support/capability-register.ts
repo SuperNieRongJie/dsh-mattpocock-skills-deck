@@ -36,8 +36,13 @@ export const GITEE_CAPABILITY_REGISTER = {
   update: { tier: 'provided' },
   // 标签是覆盖式写：一次把整串名字交给远端，传空数组就是清空。
   setLabels: { tier: 'provided' },
-  // Gitee 的认领人是单值 assignee：0 个清空、1 个直接写、2 个以上如实回 unsupported，不假装成功。
-  setAssignees: { tier: 'provided' },
+  // Gitee 的认领人是单值 assignee：0 个清空、1 个直接写；契约允许一次给多个人，这里只能如实拒绝，
+  // 不挑一个写进去，也不拿「协助者」字段冒充第二负责人。
+  setAssignees: {
+    tier: 'partial',
+    gap: 'Gitee 的一张票只有一个负责人位置：0 个人清空、1 个人直接写都能用，一次给 2 个人以上只能如实拒绝，不会只写第一个，也不会拿「协助者」字段冒充第二负责人。',
+    ticket: '10',
+  },
   // 挂父票先 PATCH parent_id，再写后读回；个人仓库实测 parent_id 会被静默忽略（回成功、读回没有父票），
   // 所以结构字段没生效时把关系写成正文里一行「上级地图：#票号」，读侧再解析回来。移回根仍做不到。
   setParent: {

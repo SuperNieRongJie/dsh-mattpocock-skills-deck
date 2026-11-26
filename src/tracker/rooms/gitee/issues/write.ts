@@ -312,7 +312,8 @@ export async function setLabels(
  * 写认领人。
  *
  * Gitee 的认领人只有一个位置（assignee，字符串），所以：0 个 = 清空、1 个 = 直接写、
- * 2 个以上 = 如实回 unsupported。第三种不许挑一个写进去——那等于替用户悄悄丢了其余的人。
+ * 2 个以上 = 动手前如实回 unsupported 并说清「这张票只能挂一个负责人」。第三种不许挑一个写进去
+ * ——那等于替用户悄悄丢了其余的人；也不许拿「协助者」字段冒充第二负责人，那是另一种语义。
  */
 export async function setAssignees(
   ctx: GiteeCtx,
@@ -330,10 +331,13 @@ export async function setAssignees(
   if (!wantedKey) return fail(ERROR_KIND.PARSE, 'setAssignees: key required', '', TRACKER_ERROR_STAGE.INPUT_REFUSED)
   const logins = loginsOf(assignees)
   if (logins.length > 1) {
-    return failGitee(
-      'assignee single-valued',
-      'setAssignees: Gitee 的一张票只有一个认领人位置，给 ' + String(logins.length) + ' 个人没法如实写进去（没有偷偷只写第一个）',
+    // 多人是契约允许的输入，Gitee 却只有一个负责人位置：这里动手前就拒绝，
+    // 所以标 input-refused —— deck 的回执据此告诉人「改输入才能重试」，而不是「怀疑写了一半」。
+    return fail(
+      ERROR_KIND.UNSUPPORTED,
+      'setAssignees: 这张票只能挂一个负责人（Gitee 的一张票只有一个负责人位置，「协助者」是另一种语义，不能拿来顶第二负责人）。这次给了 ' + String(logins.length) + ' 个人（' + logins.join('、') + '）：没有写进远端，也没有偷偷只写第一个。',
       JSON.stringify(logins),
+      TRACKER_ERROR_STAGE.INPUT_REFUSED,
     )
   }
   try {
