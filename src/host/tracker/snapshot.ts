@@ -177,6 +177,13 @@ interface ComposeOpts {
    * 宿主用它把整池写进快照库。回调同步返回、自己吞错，不许挡快照回包。
    */
   onRows?: (rows: Issue[]) => void
+  /**
+   * #12：刷新轮打开，让工作集多补一页已关闭票（从没进过开放池的那些）。
+   *
+   * 首屏一律不传：首屏取数次数被票 #9 的验收锁死，多这一页就是多一次远端调用；
+   * 只有刷新这条定时动作值得付这一次查询的代价，次数写进 snapshot.workingSet 日志。
+   */
+  closedPool?: boolean
 }
 
 // 创建宿主编排器。
@@ -323,6 +330,8 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
         previousSnapshot: prevSnapshot,
         // #9：开放池这份来源完整（没截断、没掉到 REST）才许把缺行判成关闭；缺行也可能只是没取到。
         openListComplete: !listFallback && !listTruncated,
+        // #12：只有刷新轮才补一页已关闭票（首屏不传，取数次数不变）。
+        closedPool: o.closedPool === true,
       })
       // #1796：工作集这一趟的事实进常驻日志（附录 #149）。为什么单记一条：子票拉取是按容器逐张发的，
       //   失败只跳过不抛，若不记，事后分不清「这张地图下面怎么少了几张」是没拉、拉到一半还是后端不提供。
@@ -338,6 +347,13 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
             closedMapSource: workingSet.closedMapSource,
             // #9：这一趟补回来的已关闭票张数（上一份快照里有、开放池里没有的顶票）。
             carriedClosedRows: workingSet.carriedClosedRows,
+            // #12：刷新轮多出来的关闭池查询次数与结果（首屏恒为 0 / 0 / 0 / 空串）。
+            //   为什么必须记：这一次查询在界面上看不见，但每轮刷新都要付；记下次数、条数与失败档，
+            //   事后才能回答「这个数字为什么涨了」「这一轮为什么没涨」。
+            closedPoolQueries: workingSet.closedPoolQueries,
+            closedPoolRows: workingSet.closedPoolRows,
+            closedPoolAdded: workingSet.closedPoolAdded,
+            closedPoolError: workingSet.closedPoolError,
             failed: workingSet.failed,
             latencyMs: Date.now() - workingSetStartedMs,
           })
