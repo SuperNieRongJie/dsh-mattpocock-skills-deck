@@ -12,7 +12,9 @@
 //   4) 远端关掉的票（#9）：一张票在远端关掉以后就不再进开放工作集，若没人记着它，它会只从列表上
 //      消失 —— 既进不了「已关闭」也进不了「全部」。所以上一份快照里有、这一趟并集里没有的顶票，
 //      在这里按已关闭补回来（只读上一份快照，不再向远端要一次）。
-// 这三件事都只读后端、只回事实；组装、计数与 partial 判定仍留在 composeSnapshot（本文件不写 deck，
+//   前三件与第四件在首屏都只读、不再向远端要关闭票；刷新那一轮例外：它多要一页「已关闭」票
+//   （#12），把「从没进过开放池」的关闭票也补进快照库，顶部的「已关闭 N」才与库里实际票数一致。
+// 这几件事都只读后端、只回事实；组装、计数与 partial 判定仍留在 composeSnapshot（本文件不写 deck，
 // 也不碰缓存与版号），所以它没有第二个读者，边界清楚。
 //
 // 什么约定不能改：
@@ -36,6 +38,14 @@ import type { RepositoryRef } from '../../shared/tracker/shape.js'
 
 /** 冷启动补已关闭地图容器行时一页要多少张：与规格 §6.3「最近 100 条」同一个数，不多取。 */
 const CLOSED_MAP_PAGE_LIMIT = 100
+/**
+ * 刷新轮补关闭池时一页要多少张（#12）：与后端翻页上限同一个数（各后端自己再钳一次）。
+ *
+ * 为什么要有这个上限：关闭票在 Gitee 这类后端上可能成千上万张，刷新是每轮都跑的定时动作，
+ * 不能把整仓关闭票都拉回来。一页就够把「最近关掉的、从没进过开放池的票」补进快照库，
+ * 剩下一轮一轮往下补；每轮只发这一次请求，次数写进日志可数。
+ */
+const CLOSED_POOL_PAGE_LIMIT = 100
 /** 探索地图的标签（小写真源；listPage 的标签筛选按契约原样下推）。 */
 const MAP_LABEL = 'wayfinder:map'
 
@@ -61,6 +71,13 @@ export interface WorkingSetInput {
    * 缺省按「全」处理；显式给 false 时本文件一张都不补 —— 来源不全时缺行说明不了票已关闭。
    */
   openListComplete?: boolean
+  /**
+   * 刷新轮才开（#12）：从远端补一页已关闭票，让「从没进过开放池」的关闭票也进快照库。
+   *
+   * 首屏一律不传：首屏取数次数被票 #9 的验收锁死（只有 list 一次 + 已关闭容器行那一页），
+   * 这里多要一页就是多一次远端调用。只在刷新那一轮由 composeSnapshot 打开。
+   */
+  closedPool?: boolean
 }
 
 /** 组装结果：并集行 + 这一趟向远端多要了几次、失败了几个、已关闭容器行从哪来。 */
@@ -89,6 +106,17 @@ export interface WorkingSetResult {
    * 这张数进常驻日志：事后要分得清「这张票为什么出现在已关闭里」是补回来的还是后端真回了它。
    */
   carriedClosedRows: number
+  /** 这一趟真的向远端发了几次关闭池查询（0 或 1；只有刷新轮才可能是 1）。 */
+  closedPoolQueries: number
+  /** 关闭池那一页回了多少张（失败时为 0）。 */
+  closedPoolRows: number
+  /** 关闭池那一页里真的补进并集的张数（已有、拉取请求、容器下的子票都不算）。 */
+  closedPoolAdded: number
+  /**
+   * 关闭池查询的失败档（空串表示没失败或没发）：错误档原样，异常记 thrown。
+   * 只记档名不记远端原文 —— 日志纪律要求这类行说清「哪一步、什么档」，不带正文。
+   */
+  closedPoolError: string
 }
 
 /** 这一行的票号：key 优先，number 兜底；两个都没有时回空串（组装层会把它当没有编号的行丢掉）。 */
@@ -258,6 +286,45 @@ function appendCarriedClosedRows(rows: any[], seen: Record<string, number>, prev
 }
 
 /**
+ * 把关闭池那一页里的票按已关闭补进并集，返回真的补进去几张（#12）。
+ *
+ * 为什么不复用 appendClosedRows：那一条只收 type==='map' 的容器行（#9 补的是地图这一档），
+ * 关闭池要补的是「所有没在开放池里出现过的已关闭票」，规格、实施票、普通票都算。
+ * 三条不补的边界与 appendCarriedClosedRows 相同：
+ *   1. 拉取请求不补：它不是工单，快照库的计数口径也不数它（counts.ts 的 is_pull_request 过滤）；
+ *   2. 挂在容器下面的子票不补：容器关掉以后后端不提供它的子票（#691），一页里混进来的子票
+ *      在组装层找不到父容器，补进来只会在库里留一行界面画不出来的孤儿行；
+ *   3. 已经在并集里的不补：按 (effortId, key) 身份去重，同一张票只出现一行。
+ * 只收 state 确实是 CLOSED 的行：关闭池这条查询理论上只回关闭票，但「状态没解析出来」的行
+ * 不能当成关闭票写进库，否则顶部的「已关闭 N」会多于实际。
+ */
+function appendClosedPoolRows(rows: any[], seen: Record<string, number>, list: any[]): number {
+  let added = 0
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue
+    if (!isClosedRow(item)) continue
+    if (item.isPullRequest === true) continue
+    const parentKey: any = item.parentKey
+    if (parentKey !== undefined && parentKey !== null && parentKey !== '') continue
+    const row: any = thinCarriedRow(item)
+    if (!row.key) continue
+    const id: string = rowIdOf(row)
+    if (seen[id]) continue
+    seen[id] = rows.length + 1
+    rows.push(row)
+    added++
+  }
+  return added
+}
+
+/** 关闭池查询的失败档：异常与空回包也要能分辨，不能都记成 unknown。 */
+function closedPoolFailureKind(res: any): string {
+  if (!res) return 'thrown'
+  const kind: any = res.error ? res.error.kind : null
+  return typeof kind === 'string' && kind ? kind : 'unknown'
+}
+
+/**
  * 组装首屏工作集（纯装配 + 只读远端）。
  *
  * 进：开放池（list({state:'open'}) 的原样行）、用开放池先组装出来的容器行、上一份快照（容器行与整份票行）。
@@ -350,6 +417,32 @@ export async function assembleWorkingSet(input: WorkingSetInput): Promise<Workin
     ? 0
     : appendCarriedClosedRows(rows, seen, args.previousSnapshot)
 
+  // #12：刷新轮再补一页「已关闭」票。上面那条补回规则只能补「上一份快照里见过」的票；
+  //   一张建好就关、或本机从来没同步到过它的票，上一份快照里也没有，顶部的「已关闭 N」
+  //   就会一直小于库里实际关闭票数。这一页是唯一的关闭票来源，所以只在刷新轮打开。
+  //   代价有界：每轮最多一次 listPage，回包条数受 CLOSED_POOL_PAGE_LIMIT 与后端页大小双重限制；
+  //   发起次数、回包条数、补入条数、失败档都交给 composeSnapshot 记进 snapshot.workingSet。
+  let closedPoolQueries = 0
+  let closedPoolRows = 0
+  let closedPoolAdded = 0
+  let closedPoolError = ''
+  if (args.closedPool === true && tracker && typeof tracker.listPage === 'function') {
+    closedPoolQueries++
+    let page: any = null
+    try {
+      page = await tracker.listPage(ref, { state: 'closed' }, { limit: CLOSED_POOL_PAGE_LIMIT }, ctx)
+    } catch (e) {
+      page = null
+    }
+    if (page && page.ok === true) {
+      const items: any[] = page.data && Array.isArray(page.data.items) ? page.data.items : []
+      closedPoolRows = items.length
+      closedPoolAdded = appendClosedPoolRows(rows, seen, items)
+    } else {
+      closedPoolError = closedPoolFailureKind(page)
+    }
+  }
+
   return {
     rows,
     openContainers,
@@ -360,5 +453,9 @@ export async function assembleWorkingSet(input: WorkingSetInput): Promise<Workin
     closedMapRows,
     closedMapSource,
     carriedClosedRows,
+    closedPoolQueries,
+    closedPoolRows,
+    closedPoolAdded,
+    closedPoolError,
   }
 }

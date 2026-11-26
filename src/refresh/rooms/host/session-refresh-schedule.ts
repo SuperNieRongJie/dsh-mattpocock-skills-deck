@@ -48,7 +48,8 @@ type UiDescription = ReturnType<typeof projectUiDescription>
  * #1774：previousSnapshot 是上一趟已知的快照（房间内存缓存里那份），来源不完整时交给编排层
  * 补回上次的容器与子票。为什么由这里传：编排器是每次请求新建的实例，它自己的进程内缓存永远是空的。
  */
-type ComposerOpts = { ifNoneMatch?: string; force?: boolean; previousSnapshot?: unknown; onRows?: (rows: unknown[]) => void }
+// #12：closedPool 让刷新这一轮多要一页已关闭票（首屏那条路不传，票 #9 锁死了首屏取数次数）。
+type ComposerOpts = { ifNoneMatch?: string; force?: boolean; previousSnapshot?: unknown; onRows?: (rows: unknown[]) => void; closedPool?: boolean }
 // 编排回包：snapshot 是后端原始快照（交给 upcaseSnapStates 收形）；error.message 是给人看的那句话。
 type Composed = { ok: boolean; error?: { message?: string } | null; snapshot?: unknown; fail?: unknown; notModified?: unknown; status?: unknown; version?: unknown; cached?: unknown }
 type Composer = { composeSnapshot(id: string, repo: RepoRef, ctx: unknown, o: ComposerOpts): Promise<Composed> }
@@ -203,7 +204,8 @@ export function createSessionRefresh(deps: RefreshDeps) {
           if (typeof budgetReadout === 'function') composerOpts.budgetReadout = budgetReadout; if (typeof openSession === 'function') composerOpts.openSession = openSession
           const composer: Composer = createSnapshotComposer(reg, composerOpts)
           const prevScreen = await previousScreenOf(backendId, repoRef)
-          const res = await composer.composeSnapshot(backendId, repoRef, ctx2, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: true, previousSnapshot: (prevScreen && prevScreen.replay) ? prevScreen.replay.snapshot : null, onRows: collectRows })
+          // #12：刷新这一轮多补一页已关闭票 —— 首屏不补，只有刷新值得付这一次查询。
+          const res = await composer.composeSnapshot(backendId, repoRef, ctx2, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: true, previousSnapshot: (prevScreen && prevScreen.replay) ? prevScreen.replay.snapshot : null, onRows: collectRows, closedPool: true })
           if (!res.ok) throw new Error((res.error && res.error.message) || 'composeSnapshot failed')
           // 先提交库，再把新快照交给界面：写库失败就整趟刷新失败，不能让界面显示一份重启后会消失的数据。
           // #1：写库交回来的版本就是这份新数据的起点，随回包一起交给客户端记进版本簿。
@@ -381,7 +383,8 @@ export function createSessionRefresh(deps: RefreshDeps) {
         if (typeof budgetReadout === 'function') composer2Opts2.budgetReadout = budgetReadout; if (typeof openSession === 'function') composer2Opts2.openSession = openSession
         const composer2: Composer = createComposer2(reg2, composer2Opts2)
         const prevScreen2 = await previousScreenOf(backendId2, repoRef2)
-        const res2 = await composer2.composeSnapshot(backendId2, repoRef2, ctx2b, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: true, previousSnapshot: (prevScreen2 && prevScreen2.replay) ? prevScreen2.replay.snapshot : null, onRows: collectRows })
+        // #12：回退这一条也是刷新轮，关闭池查询的口径与主路径一致。
+        const res2 = await composer2.composeSnapshot(backendId2, repoRef2, ctx2b, { ifNoneMatch: (args && (args.ifNoneMatch || args.version)) || '', force: true, previousSnapshot: (prevScreen2 && prevScreen2.replay) ? prevScreen2.replay.snapshot : null, onRows: collectRows, closedPool: true })
         if (!res2.ok) throw new Error((res2.error && res2.error.message) || 'composeSnapshot failed')
         // #1：回退这条路同样把写库之后的版本交回去（口径与上面 composer 支路一致）。
         const replyVersion2 = await persistRefreshRows(cwd, backendId2, repoRef2, prevScreen2 && prevScreen2.replay ? prevScreen2.replay.mergeVersion : undefined)
