@@ -113,7 +113,10 @@ const ALLOWED = {
   // 2026-11-01（#1796）新增常驻 #149 `snapshot.workingSet`：首屏工作集这一趟的事实。为什么要有：子票是按容器
   //   逐张发的，失败只跳过不抛；不记的话，事后分不清「这张地图下面怎么少了几张」是没拉、拉到一半还是后端
   //   不提供。失败清单只写「票号:错误档」，不记远端原文与正文。落点：src/host/tracker/snapshot.ts 的 composeSnapshot。
-  'snapshot.workingSet': ['openContainers', 'subIssues', 'subIssuesFailed', 'subIssuesIncomplete', 'closedMapRows', 'closedMapSource', 'failed', 'latencyMs'],
+  // 2026-11-27（#9）`snapshot.workingSet` 增补一格 `carriedClosedRows`：这一趟补回来的已关闭票张数
+  //   （上一份快照里有、这一趟开放池里没有的顶票）。为什么要有：「这张票怎么出现在已关闭里」的两种可能
+  //   （后端真的回了它 / 本仓按上一份快照补的）只看别的格分不出来；为 0 时说明补行逻辑这一次一张都没补。
+  'snapshot.workingSet': ['openContainers', 'subIssues', 'subIssuesFailed', 'subIssuesIncomplete', 'closedMapRows', 'closedMapSource', 'carriedClosedRows', 'failed', 'latencyMs'],
   // 2026-11-04（#1869）新增常驻 #150～#153 四族 `workspaceSnapshot.*`：面板 issue 数据的权威副本换成
   //   本地 SQLite 快照库之后，「只看日志就能说出走到哪一步」全靠这四族。字段一律只记枚举、计数、耗时
   //   与短散列（工作区根与仓库身份都是 hash，不记路径原文）；`detail` 只放一句话的失败说明。
