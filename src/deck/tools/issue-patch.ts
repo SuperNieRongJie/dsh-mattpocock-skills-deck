@@ -293,7 +293,7 @@ export function createDeckIssuePatch(deps?: DeckIssuePatchDeps) {
               if (want.length) notes.push(claimNoteOf(back.body))
             }
           } else if (r && r.error && r.error.kind === 'unsupported') {
-            fail('assignees', r, undefined, '这个后端做不到记认领人（后端原话：' + String(r.error.message || '').slice(0, 160) + '）。')
+            fail('assignees', r, undefined, '这个后端做不到记认领人：这是一次如实拒绝，别当成已经记上（后端原话：' + String(r.error.message || '').slice(0, 160) + '）。')
           } else fail('assignees', r)
         }
       }
