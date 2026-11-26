@@ -2,13 +2,16 @@
 //
 // 为什么单开这一个文件：composeSnapshot 原来只拿一趟「开放票与已关闭票混排、按更新时间倒序、500 条封顶」
 // 的列表当首屏，编号靠后的未关闭票会被大量已关闭票挤出窗口（#1796 的现场：30 张未关闭票里有 8 张
-// 排在第 776～1282 名，根本进不来）。修法是把首屏改成三份来源的并集：
+// 排在第 776～1282 名，根本进不来）。修法是把首屏改成四份来源的并集：
 //   1) 开放工作集：list({state:'open'}) 由后端先筛状态，未关闭票不再和已关闭历史挤同一个窗口；
 //   2) 开放容器的子票：开放工作集只装得下开放票，已关闭的子票要靠 listSubIssues 逐张开放容器拉全，
 //      地图详情才数得清「共 N 张」（#1796 code review 补：规格容器同理 —— 它的实施票做完了就关，
 //      不补回来会让做完了的规格看着一张子票都没有）；
 //   3) 已关闭地图的容器行：开放工作集里没有它们，热启动沿用上一份快照里的容器行，冷启动补一页薄行，
-//      列表页签上的容器行才不会凭空消失。
+//      列表页签上的容器行才不会凭空消失；
+//   4) 远端关掉的票（#9）：一张票在远端关掉以后就不再进开放工作集，若没人记着它，它会只从列表上
+//      消失 —— 既进不了「已关闭」也进不了「全部」。所以上一份快照里有、这一趟并集里没有的顶票，
+//      在这里按已关闭补回来（只读上一份快照，不再向远端要一次）。
 // 这三件事都只读后端、只回事实；组装、计数与 partial 判定仍留在 composeSnapshot（本文件不写 deck，
 // 也不碰缓存与版号），所以它没有第二个读者，边界清楚。
 //
@@ -48,6 +51,16 @@ export interface WorkingSetInput {
   openContainers?: any[]
   /** 上一份快照的 maps：热启动时从这里取已关闭地图容器行。 */
   previousMaps?: any[]
+  /**
+   * 上一份快照的整份内容（组装过的那份）：用来补「上一趟还看得见、这一趟开放池里没有」的票行（#9）。
+   * 传 null 或省略表示没有上一份快照，这一类行一张都不补。
+   */
+  previousSnapshot?: any
+  /**
+   * 这一趟开放池这份来源全不全（列表没被截断、没掉到 REST 降级）。
+   * 缺省按「全」处理；显式给 false 时本文件一张都不补 —— 来源不全时缺行说明不了票已关闭。
+   */
+  openListComplete?: boolean
 }
 
 /** 组装结果：并集行 + 这一趟向远端多要了几次、失败了几个、已关闭容器行从哪来。 */
@@ -71,6 +84,11 @@ export interface WorkingSetResult {
   closedMapRows: number
   /** 已关闭地图容器行从哪来：上一份快照 / 冷启动补的一页 / 没有。 */
   closedMapSource: 'previous' | 'page' | 'none'
+  /**
+   * 按「上一份快照里有、这一趟并集里没有」补回来的已关闭票行张数（普通票与容器行都算，#9）。
+   * 这张数进常驻日志：事后要分得清「这张票为什么出现在已关闭里」是补回来的还是后端真回了它。
+   */
+  carriedClosedRows: number
 }
 
 /** 这一行的票号：key 优先，number 兜底；两个都没有时回空串（组装层会把它当没有编号的行丢掉）。 */
@@ -173,9 +191,76 @@ function appendClosedRows(rows: any[], seen: Record<string, number>, list: any[]
 }
 
 /**
+ * 上一份快照里可能压着「上一趟还看得见的票」的两处地方：maps（容器行）与 issues（没挂容器的普通票）。
+ * 为什么容器行也要看：容器上一趟还开着、这一趟在远端关掉了，开放池里没有它，而已关闭容器行那条来源
+ * 只收「上一趟就已经关闭」的行 —— 不在这里补，整行会消失。
+ */
+function previousRowsOf(previousSnapshot: any): any[] {
+  const out: any[] = []
+  try {
+    const snap: any = previousSnapshot || {}
+    if (Array.isArray(snap.maps)) for (const m of snap.maps) out.push(m)
+    if (Array.isArray(snap.issues)) for (const r of snap.issues) out.push(r)
+  } catch (e) {
+    return []
+  }
+  return out
+}
+
+/**
+ * 补回来的关闭票薄行：只带列表画一行所需的事实（票号、类型、标题、链接、标签、更新时间），
+ * 状态一律写成已关闭，正文显式给空串 —— 与已关闭地图容器薄行同一套约定，薄行不冒充详情。
+ */
+function thinCarriedRow(row: any): any {
+  const out: any = {}
+  out.key = keyOfRow(row)
+  const n = numberOfRow(row)
+  if (n !== null) out.number = n
+  out.effortId = effortOf(row)
+  const type: string = row && typeof row.type === 'string' ? row.type : ''
+  out.type = type === 'map' || type === 'spec' ? type : 'issue'
+  out.state = 'CLOSED'
+  out.title = String(row && row.title !== undefined && row.title !== null ? row.title : '')
+  if (row && typeof row.url === 'string' && row.url) out.url = row.url
+  if (row && Array.isArray(row.labels)) out.labels = row.labels.slice()
+  if (row && typeof row.updatedAt === 'string' && row.updatedAt) out.updatedAt = row.updatedAt
+  out.body = ''
+  out.isPullRequest = false
+  return out
+}
+
+/**
+ * #9：把「上一份快照里有、这一趟并集里没有」的票按已关闭补进并集，返回真的补进去几张。
+ *
+ * 为什么这条规则成立：一张票在远端被关掉以后，开放工作集（list({state:'open'})）里就没有它了；
+ * 已关闭票这一趟没人去要（首屏不新增查询），唯一还记着它的地方就是上一份快照。
+ * 三条不补的边界：
+ *   1. 拉取请求不补：合并/关闭的拉取请求有自己的增量抓取与页签，不归这张票管；
+ *   2. 挂在容器下面的子票不补：容器关掉以后后端本来就不提供它的子票（#691），缺行证明不了这张票关了；
+ *   3. 已经在并集里的不补：按 (effortId, key) 身份去重，同一张票只出现一行。
+ */
+function appendCarriedClosedRows(rows: any[], seen: Record<string, number>, previousSnapshot: any): number {
+  let added = 0
+  for (const prev of previousRowsOf(previousSnapshot)) {
+    if (!prev || typeof prev !== 'object') continue
+    if (prev.isPullRequest === true) continue
+    const parentKey: any = prev.parentKey
+    if (parentKey !== undefined && parentKey !== null && parentKey !== '') continue
+    const row: any = thinCarriedRow(prev)
+    if (!row.key) continue
+    const id: string = rowIdOf(row)
+    if (seen[id]) continue
+    seen[id] = rows.length + 1
+    rows.push(row)
+    added++
+  }
+  return added
+}
+
+/**
  * 组装首屏工作集（纯装配 + 只读远端）。
  *
- * 进：开放池（list({state:'open'}) 的原样行）、用开放池先组装出来的容器行、上一份快照的容器行。
+ * 进：开放池（list({state:'open'}) 的原样行）、用开放池先组装出来的容器行、上一份快照（容器行与整份票行）。
  * 出：组装层要吃的并集行，以及「这一趟子票拉了几张、坏在哪几张、已关闭容器行从哪来」的事实；
  *   这些事实由 composeSnapshot 记进常驻日志 snapshot.workingSet（附录 #149），所以本文件的返回字段都有读者。
  * 异常策略：远端失败只跳过不抛（快照这条路可用性优先）；调不通的失败数交给调用方决定 partial 与日志。
@@ -258,6 +343,13 @@ export async function assembleWorkingSet(input: WorkingSetInput): Promise<Workin
     }
   }
 
+  // #9：远端把票关掉以后，它不再进开放池 —— 只从列表上消失，既进不了「已关闭」也进不了「全部」。
+  //   这里把上一份快照里有、这一趟并集里没有的顶票按已关闭补回来，不发任何远端请求（首屏取数次数不变）。
+  //   只在开放池这份来源完整时补：列表被截断或降级时，缺行可能只是这一趟没取到，不能当成关闭。
+  const carriedClosedRows: number = args.openListComplete === false
+    ? 0
+    : appendCarriedClosedRows(rows, seen, args.previousSnapshot)
+
   return {
     rows,
     openContainers,
@@ -267,5 +359,6 @@ export async function assembleWorkingSet(input: WorkingSetInput): Promise<Workin
     failed: failedContainers.join(';'),
     closedMapRows,
     closedMapSource,
+    carriedClosedRows,
   }
 }

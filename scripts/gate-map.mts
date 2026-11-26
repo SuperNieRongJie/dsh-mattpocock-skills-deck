@@ -888,6 +888,11 @@ export const COMPLETION_RECORDED_GATES: Record<string, number> = {
   // 没接库口时 version 为 null（不拿 0 冒充）；客户端 installedSnapshotVersionOf 以回包版本为准、
   // 第 0 版合法、负数/小数/字符串不算数；外加宿主两条组包支路与客户端两处接线的静态断言。单跑实测 23 条。
   'verify-1-refresh-reply-version': 23,
+  // 2026-11-27 #9：远端关掉的票要在「已关闭」与「全部」档看得见。四条验收拆成 0/A/B/C/D 五组：
+  //   刷新后进已关闭档、0 开放票仓库的全部档仍有关闭票、每轮远端调用不增加（list 一次开放票 +
+  //   既有那一次已关闭地图容器页）、截断与降级时不拿缺行当关闭、补行只补顶票与容器且保留可画字段。
+  // 31 条是单跑实测得出的。
+  'verify-9-panel-closed-pool': 31,
 }
 
 // 冒烟链（scripts.smoke）上已经开闸的门禁，写法与上面那张表一样：写在这里 = 已开闸，值 = 期望条数。

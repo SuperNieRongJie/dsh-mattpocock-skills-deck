@@ -319,6 +319,10 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
         openContainers: prelim.maps,
         // #1774：上一份快照优先用调用方传入的那份（生产电话路的房间缓存），没有才用本编排器缓存。
         previousMaps: (prevSnapshot && Array.isArray(prevSnapshot.maps)) ? prevSnapshot.maps : [],
+        // #9：上一份快照整份递下去，用来把「远端已关、这一趟开放池里没有」的票补成已关闭行。
+        previousSnapshot: prevSnapshot,
+        // #9：开放池这份来源完整（没截断、没掉到 REST）才许把缺行判成关闭；缺行也可能只是没取到。
+        openListComplete: !listFallback && !listTruncated,
       })
       // #1796：工作集这一趟的事实进常驻日志（附录 #149）。为什么单记一条：子票拉取是按容器逐张发的，
       //   失败只跳过不抛，若不记，事后分不清「这张地图下面怎么少了几张」是没拉、拉到一半还是后端不提供。
@@ -332,6 +336,8 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
             subIssuesIncomplete: workingSet.subIssuesIncomplete,
             closedMapRows: workingSet.closedMapRows,
             closedMapSource: workingSet.closedMapSource,
+            // #9：这一趟补回来的已关闭票张数（上一份快照里有、开放池里没有的顶票）。
+            carriedClosedRows: workingSet.carriedClosedRows,
             failed: workingSet.failed,
             latencyMs: Date.now() - workingSetStartedMs,
           })
