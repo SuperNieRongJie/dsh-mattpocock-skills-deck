@@ -214,6 +214,12 @@ export interface Issue {
   closedAt: string | null
   /** 父地图的 key；根票是 `null`（核心字段，永远存在）。 */
   parentKey: string | null
+  /**
+   * 父票这条关系是从哪里读出来的，只有「结构字段读不出、改用票正文兜底」的后端才填：
+   * `'structure'` 表示原生结构字段里有这条父子，`'body'` 表示是从票正文那一行约定文字读出来的（#8）。
+   * 省略表示这个后端不区分来源（例如 GitHub 只有结构字段），读的人不要替它猜。
+   */
+  parentSource?: 'structure' | 'body'
   author?: Actor
   /** 指派人（认领）；`[]` 表示明确「没人认领」，整个字段省略表示「认领状态未知」。 */
   assignees?: Actor[]

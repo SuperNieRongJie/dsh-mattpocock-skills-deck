@@ -8,6 +8,8 @@
 //      没标来源的老后端文案逐字不变；
 //   D) 工具层：带父票建票、远端结构没生效但正文兜底成功时，回执逐条证据里带着
 //      「远端结构字段没生效，已写进票正文（来源：正文）」；两条路都失败时回 partial 说没挂上。
+//   E) 读票回执：房层标了来源（正文 / 结构 / 没有父票）时，抬头与落点按来源说清楚。
+// 另有一条内容安全线（B19–B24）：单票读不回来时手里只有回包，绝不许拿它当底稿改正文。
 const path = require('path')
 const { pathToFileURL } = require('url')
 const { makeDecideStub, chooseWorkspace } = require('./lib/deck-decide-stub.js')
@@ -54,7 +56,10 @@ function makeRemote(opts) {
     const payload = bodyAt >= 0 ? JSON.parse(String(args[bodyAt + 1])) : null
     const single = /^repos\/o\/r\/issues\/([^/]+)$/.exec(target)
     if (method === 'GET' && single) {
-      const row = store.get(decodeURIComponent(single[1]))
+      const key = decodeURIComponent(single[1])
+      // 只让某几张票的单票读回失败：用来复现「只有回包、没有可靠底稿」的那条路。
+      if (typeof o.readBackFails === 'function' && o.readBackFails(key)) return { code: 1, stdout: '', stderr: '500 单票读回失败' }
+      const row = store.get(key)
       if (!row) return { code: 1, stdout: '', stderr: '404 not found' }
       return { code: 0, stdout: JSON.stringify(row), stderr: '' }
     }
@@ -190,6 +195,29 @@ async function main() {
     check(r.ok === true && note && String(note.message || '').indexOf('结构字段没生效') >= 0, 'B18 建票时两条路都失败：票仍建成，但票上记着父子边没挂上（parentError）')
   }
 
+  {
+    // 只有改票回包、单票一直读不回来：回包里的正文可能缺失或不是全文，拿它当底稿会覆盖票面正文。
+    // 这一档必须一个字都不改、如实失败。
+    const remote = makeRemote({ structureWorks: false, readBackFails: (key) => key === '90' })
+    const tracker = giteeMod.giteeBackend.create(fakeCtx(remote.exec))
+    const before = remote.calls.length
+    const r = await tracker.setParent(repo, '90', '8', {})
+    check(r.ok === false, 'B19 单票读不回来时不拿回包补正文：如实失败（实得 ok=' + r.ok + '）')
+    const msg = String((r.error && r.error.message) || '')
+    check(msg.indexOf('读不回整票就不敢改正文') >= 0, 'B20 失败原话写清是读不回整票、不敢改正文：' + msg.slice(0, 140))
+    check(remote.store.get('90').body === '原正文', 'B21 票面正文一个字节都没被改（实得 ' + JSON.stringify(remote.store.get('90').body) + '）')
+    check(remote.calls.slice(before).every((c) => c.indexOf('上级地图：') < 0), 'B22 这一趟根本没发写正文的请求')
+  }
+
+  {
+    const remote = makeRemote({ structureWorks: false, readBackFails: (key) => key === '91' })
+    const tracker = giteeMod.giteeBackend.create(fakeCtx(remote.exec))
+    const r = await tracker.create(repo, { title: '读不回的新票', body: '正文', parentKey: '8' })
+    const note = r.data && r.data.parentError
+    check(r.ok === true && !!note && String(note.message || '').indexOf('读不回整票就不敢改正文') >= 0, 'B23 建票后单票读不回来：票仍建成，但记着没改正文的原因')
+    check(remote.store.get('91').body === '正文', 'B24 建票时票面正文原样保留（实得 ' + JSON.stringify(remote.store.get('91').body) + '）')
+  }
+
   // ---- D) 工具层：回执里看得见来源 ----
   {
     const budget = await imp('src/refresh/kernel/host-budget.js')
@@ -258,6 +286,58 @@ async function main() {
     disp2.dispose()
   }
 
+  // ---- E) 工具层：单票回执把「来源：结构 / 来源：正文」说出来（#8 第二轮）----
+  {
+    const budget = await imp('src/refresh/kernel/host-budget.js')
+    const ledgerMod = await imp('src/refresh/rooms/host/quota-ledger.ts')
+    const gateMod = await imp('src/refresh/rooms/host/refresh-gate.ts')
+    const registryMod = await imp('src/tracker/registry/core.ts')
+    const toolCost = await imp('src/refresh/kernel/tool-call-budget.js')
+    const getMod = await imp('src/deck/tools/issue-get.ts')
+    const clock = 1700000000000
+    const ledger = ledgerMod.createLedger({ now: () => clock })
+    const gate = gateMod.createGate({ ledger: ledger, now: () => clock })
+    ledger.ensureBackend('github', { kind: 'two-buckets' })
+    ledger.syncServer('github', { rest: { limit: 5000, remaining: 5000, reset: clock + 3600000 }, graphql: { limit: 5000, remaining: 5000, reset: clock + 3600000 } }, clock)
+    const registry = registryMod.createRegistry({ logEvent: () => {}, isEnabled: () => false }, { matchesTimeout: 200 })
+    // 同一个桩，按用例换它读回来的那一行：房层给什么 parentSource，回执就该照什么说。
+    let row = null
+    const stub = {
+      id: 'stub-8-get', label: '桩（读票回执按来源标注）', matches: async () => false,
+      budget: { kind: 'off-network', countsRequests: false, countsPoints: false, independentBuckets: false },
+      create: () => ({
+        id: 'stub-8-get',
+        async get(repoArg, key) { return { ok: true, data: row } },
+      }),
+    }
+    const disp = registry.register(stub)
+    chooseWorkspace('/ws/8', 'stub-8-get')
+    const deps = {
+      gate, registry, budget, estimate: toolCost.estimateToolCost, costInputFrom: toolCost.toolCostInputFrom,
+      handleFor: () => ({ cwd: '/ws/8', refId: 'o/r' }), backendCtx: {}, now: () => clock, log: { fire: () => {} }, invalidate: () => {},
+      decideBackend: makeDecideStub(registry),
+    }
+    const getTool = getMod.createDeckIssueGet(deps)
+    const exec = { agent: { session: { id: 's-8', cwd: '/ws/8' } } }
+    const base = { key: '90', title: '实施票', state: 'open', type: 'issue', body: '正文', url: '', labels: [], assignees: [], parentKey: '8' }
+
+    row = Object.assign({}, base, { parentKey: '8', parentSource: 'body', body: '上级地图：#8\n\n正文' })
+    const bodyRes = await getTool.run(exec, { key: '90', blocking: false })
+    check(bodyRes.status === 'ok' && bodyRes.data.landings.parent === rules.EDGE_LANDING.BODY_LINE, 'E1 房层标了来源正文 → 回执落点记成「正文行」（实得 ' + String(bodyRes.data && bodyRes.data.landings && bodyRes.data.landings.parent) + '）')
+    check(String(bodyRes.text).indexOf('父票 8（来源：正文）') >= 0, 'E2 抬头把来源说出来：' + String(bodyRes.text).slice(0, 80))
+    check(String(bodyRes.data && bodyRes.data.landings && bodyRes.data.landings.caveat).indexOf('来源：正文') >= 0 && String(bodyRes.data.landings.caveat).indexOf('这两个落点是从契约返回的字段读出来的') < 0, 'E3 正文兜底时 caveat 不再说「只知道契约字段」，改写为已知来源')
+
+    row = Object.assign({}, base, { parentKey: '8', parentSource: 'structure', body: '正文' })
+    const structRes = await getTool.run(exec, { key: '90', blocking: false })
+    check(structRes.data.landings.parent === rules.EDGE_LANDING.CONTRACT_PARENT_FIELD, 'E4 房层标了来源结构 → 落点仍是契约的父子列（实得 ' + String(structRes.data.landings.parent).slice(0, 20) + '）')
+    check(String(structRes.text).indexOf('父票 8（来源：结构）') >= 0, 'E5 抬头标「来源：结构」：' + String(structRes.text).slice(0, 80))
+
+    row = Object.assign({}, base, { parentKey: null, parentSource: undefined, body: '正文' })
+    const noneRes = await getTool.run(exec, { key: '90', blocking: false })
+    check(noneRes.data.landings.parent === rules.EDGE_LANDING.UNKNOWN, 'E6 没有父票 → 落点记成说不好（实得 ' + String(noneRes.data.landings.parent).slice(0, 20) + '）')
+    check(String(noneRes.text).indexOf('父票 （没有）') >= 0 && String(noneRes.text).indexOf('来源：') < 0, 'E7 没有父票时不瞎标来源：' + String(noneRes.text).slice(0, 80))
+    disp.dispose()
+  }
   console.log(failed ? ('门禁失败：' + total + ' 条断言里有失败') : ('门禁通过：' + total + ' 条断言全绿'))
   process.exit(failed ? 1 : 0)
 }

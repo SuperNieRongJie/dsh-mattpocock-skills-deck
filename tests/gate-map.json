@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-26T15:22:44.935Z",
+  "generatedAt": "2026-11-26T15:31:46.987Z",
   "generatedBy": "node scripts/gate-map.mts",
   "chainLength": 605,
   "gateCount": 605,
@@ -8746,6 +8746,7 @@
       "guards": [
         "src/deck/rules/edge-landing.ts",
         "src/deck/tools/issue-create.ts",
+        "src/deck/tools/issue-get.ts",
         "src/refresh/kernel/host-budget.ts",
         "src/refresh/kernel/tool-call-budget.ts",
         "src/refresh/rooms/host/quota-ledger.ts",
@@ -8771,7 +8772,7 @@
       "buildOutputOnly": false,
       "completionRecord": false,
       "expectedAssertions": 0,
-      "reason": "归属来自：载入模块（require / import / pathToFileURL） 1 条；源码里的路径字面量 10 条"
+      "reason": "归属来自：载入模块（require / import / pathToFileURL） 1 条；源码里的路径字面量 11 条"
     },
     {
       "step": "node tests/verify-818-version-control-view.ts",

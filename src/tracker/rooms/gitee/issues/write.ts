@@ -213,9 +213,15 @@ export async function createIssue(
       // #8：parent_id 在个人仓库会被静默忽略（PATCH 回成功、读回来却没有父票）。
       // 结构字段没生效时把关系写进正文，再读回确认；不能拿建票入参或回包自称当证据。
       const first = await readBackIssue(effective, refId, reply.issue.key)
-      const current = first || created
-      if (current.parentKey === parent) return { ok: true, data: current }
-      const fallback = await writeParentBodyLine(effective, refId, current, parent)
+      if (first && first.parentKey === parent) return { ok: true, data: first }
+      // 正文兜底只能拿「一次成功的单票读回」当底稿：建票回包里的正文可能缺失或不是全文，
+      // 拿它整段盖回去会把票面正文写没，这是不可逆的内容损坏，所以读不回整票时一个字都不改正文。
+      if (!first) {
+        const unread = created as Issue & { parentError?: { kind: string; message: string } }
+        unread.parentError = { kind: 'write', message: '远端结构字段没生效；单票没读回来，读不回整票就不敢改正文（来源：正文）' }
+        return { ok: true, data: unread }
+      }
+      const fallback = await writeParentBodyLine(effective, refId, first, parent)
       if (fallback.ok) return { ok: true, data: fallback.issue }
       // 票已经建成，这是「父子边没挂上」而不是「票没建成」：照 GitHub 房 parentError 的先例
       // 把原因记在票上，让工具层按部分成功报出来，同时保住票号。
@@ -480,13 +486,16 @@ export async function setParent(
     if (first && first.parentKey === parent) return { ok: true, data: first }
     // 改票请求本身失败时如实回它的原因：这时去写正文，只会用一个次要失败盖住真实原因。
     if (!reply.ok) return reply.result
-    const current = first || reply.issue
-    if (current) {
-      const fallback = await writeParentBodyLine(effective, refId, current, parent)
-      if (fallback.ok) return { ok: true, data: fallback.issue }
-      return failGitee(fallback.message, 'setParent: ' + fallback.message, parent)
+    // 正文兜底只能拿「一次成功的单票读回」当底稿：改票回包里的正文可能缺失或不是全文，
+    // 拿它整段盖回去会把票面正文写没，这是不可逆的内容损坏，所以读不回整票时一个字都不改正文。
+    if (!first) {
+      // 读回失败本身没留下具体错误对象，按「读不通远端」这一档带上原话：不能让上层回一句
+      // 「没认出这次失败的原因」，那会让人误以为结构字段生效了。
+      return failGitee({ kind: ERROR_KIND.NETWORK }, 'setParent: 远端结构字段没生效，单票也没读回来（读不通远端），读不回整票就不敢改正文（来源：正文）', parent)
     }
-    return failGitee('parent write unverified', 'setParent: 写完既没读回票，也没有回包可补正文，这条父子边没挂上', parent)
+    const fallback = await writeParentBodyLine(effective, refId, first, parent)
+    if (fallback.ok) return { ok: true, data: fallback.issue }
+    return failGitee(fallback.message, 'setParent: ' + fallback.message, parent)
   } catch (err) {
     return failGitee(err, 'setParent: gitee api 挂父票调用失败', err, effective)
   }
