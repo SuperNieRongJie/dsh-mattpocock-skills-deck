@@ -75,8 +75,16 @@ const tracker = {
     if (phase.closedMode === 'throw') throw new Error('关闭池查询炸了（门禁故意）')
     if (phase.closedMode === 'transport') return { ok: false, error: { kind: 'transport', message: '连不上' } }
     const isClosedPool = filter && filter.state === 'closed' && !(filter.labels && filter.labels.length)
+    // 翻页两档：closedPages 给出逐页内容（最后一页没有下一页游标），closedAlwaysMore 模拟「永远还有下一页」。
+    if (isClosedPool && Array.isArray(phase.closedPages)) {
+      const idx = opts && opts.cursor ? Number(opts.cursor) - 1 : 0
+      const items = phase.closedPages[idx] || []
+      const next = idx + 1 < phase.closedPages.length ? String(idx + 2) : null
+      return { ok: true, data: { items: items.map((r: any) => Object.assign({}, r)), nextCursor: next } }
+    }
     const items = isClosedPool ? (phase.closed || []) : []
-    return { ok: true, data: { items: items.map((r: any) => Object.assign({}, r)) } }
+    const nextCursor = isClosedPool && phase.closedAlwaysMore === true ? String(Number(opts && opts.cursor ? opts.cursor : 1) + 1) : null
+    return { ok: true, data: { items: items.map((r: any) => Object.assign({}, r)), nextCursor } }
   },
   listSubIssues: async () => { calls.listSubIssues += 1; return { ok: true, data: { items: [] } } },
 }
@@ -224,6 +232,47 @@ check(legacy && wsEvents2.length === 1 && wsEvents2[0].closedPoolQueries === 0 &
 const src = readFileSync(path.join(ROOT, 'src/host/tracker/snapshotWorkingSet.ts'), 'utf8')
 check(src.indexOf('capability-answer') < 0 && src.indexOf('capability-declaration') < 0,
   'E7 组装层没有 import 能力登记表（G5 红线）')
+
+// ── G 翻页取尽与触顶标不全（#7 评审 F7） ──────────────────────────────────────
+phase.open = [issue('1', { state: 'OPEN' })]
+phase.closedMode = 'ok'
+phase.closedPages = [
+  [issue('71', { state: 'CLOSED' })],
+  [issue('72', { state: 'CLOSED' })],
+]
+const markG = listPageCalls.length
+const g1: any = await composer.composeSnapshot('gitee', REF, CTX, { force: true, closedPool: true, previousSnapshot: null })
+const evG1 = lastEvent()
+const gCalls = closedPoolCallsFrom(markG)
+check(gCalls.length === 2 && gCalls[1] && gCalls[1].opts.cursor === '2',
+  'G1 一页没取尽就按游标翻下一页（实得 ' + gCalls.length + ' 次）', gCalls.map((c) => c.opts))
+check(evG1.closedPoolQueries === 2 && evG1.closedPoolRows === 2, 'G2 日志把两页的次数与条数如实累加', evG1)
+check(evG1.closedPoolIncomplete === false && g1.snapshot.deck.partial === false,
+  'G3 取尽时标「已取全」，deck.partial 不因此置真', { incomplete: evG1.closedPoolIncomplete, partial: g1.snapshot.deck.partial })
+
+// 五页上限：远端一直说有下一页，翻到第 5 页就停，并如实标不全。
+phase.closedPages = null
+phase.closedAlwaysMore = true
+phase.closed = [issue('73', { state: 'CLOSED' })]
+const markG2 = listPageCalls.length
+const g2: any = await composer.composeSnapshot('gitee', REF, CTX, { force: true, closedPool: true, previousSnapshot: null })
+const evG2 = lastEvent()
+check(closedPoolCallsFrom(markG2).length === 5 && evG2.closedPoolQueries === 5,
+  'G4 远端一直有下一页时翻到 5 页上限就停（实得 ' + closedPoolCallsFrom(markG2).length + ' 次）', evG2)
+check(evG2.closedPoolIncomplete === true, 'G5 触顶时日志如实标不全', evG2)
+check(evG2.closedPoolRows === 5 && g2.snapshot.deck.partial === true,
+  'G6 每页取到一张且结果标「不完全」，deck.partial 置真（界面能看出这份数据不全）', { rows: evG2.closedPoolRows, partial: g2.snapshot.deck.partial })
+phase.closedAlwaysMore = false
+
+// 只在第一页就失败时，也算没取全（不许把它当成「关闭票就这么多」）。
+phase.closedMode = 'transport'
+const markG3 = listPageCalls.length
+const g3: any = await composer.composeSnapshot('gitee', REF, CTX, { force: true, closedPool: true, previousSnapshot: null })
+const evG3 = lastEvent()
+check(closedPoolCallsFrom(markG3).length === 1 && evG3.closedPoolIncomplete === true && g3.snapshot.deck.partial === true,
+  'G7 第一页就失败时不重试、但如实标不全，deck.partial 置真', { calls: closedPoolCallsFrom(markG3).length, ev: evG3 })
+phase.closedMode = 'ok'
+phase.closed = []
 
 // ── F 接线静态判据 ───────────────────────────────────────────────────────────
 function codeOnly(text: string): string {

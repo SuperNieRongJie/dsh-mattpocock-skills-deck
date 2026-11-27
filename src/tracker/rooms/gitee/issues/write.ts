@@ -23,7 +23,6 @@ import { GITEE_READ_TIMEOUT_MS, GITEE_SLOW_READ_TIMEOUT_MS } from '../../../../s
 import { failGitee } from '../errors.js'
 import { requestIssueCreate, requestIssueUpdate, requestMilestones } from '../requests.js'
 import { normalizeIssue } from '../model/normalize.js'
-import type { GiteeIssue } from '../model/normalize.js'
 import { parentAfterCreate, resolveParentId } from './parent-write.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoNameOf, repoRefId } from '../support/repo-ref.js'

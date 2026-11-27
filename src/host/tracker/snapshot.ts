@@ -354,6 +354,8 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
             closedPoolRows: workingSet.closedPoolRows,
             closedPoolAdded: workingSet.closedPoolAdded,
             closedPoolError: workingSet.closedPoolError,
+            // #7 评审 F7：翻到页数上限还没翻完、或某一页失败时置真 —— 这一份已关闭票只是取到的那部分。
+            closedPoolIncomplete: workingSet.closedPoolIncomplete,
             failed: workingSet.failed,
             latencyMs: Date.now() - workingSetStartedMs,
           })
@@ -376,9 +378,11 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
       // #1887：数字不再向后端要，也不再有「待校准」——六个数字由快照库一次查询算出，
       //   由电话层在库写到最新之后挂到 deck.counts 上（本编排器只负责取数、写库与组装）。
       //   partial 仍只报「这份行数据有没有异常缺失」：列表触上限、REST 降级、开放容器的子票
-      //   没拉全或拉不到。计数不再参与 partial —— 数字已经从库来，不再需要拿后端 open 对账。
+      //   没拉全或拉不到、刷新轮关闭池没翻完（取到页数上限或某一页失败）。计数不再参与 partial
+      //   —— 数字已经从库来，不再需要拿后端 open 对账。
       deck.partial = listTruncated || listFallback === 'rest'
         || Number(workingSet.subIssuesFailed || 0) > 0 || Number(workingSet.subIssuesIncomplete || 0) > 0
+        || workingSet.closedPoolIncomplete === true
       snapshot.deck = deck
       // #715（诚实显示）：降级标记与「推迟 / 暂停 / 这个窗口没在刷新」这四项读数，只在这里写。
       //   降级标记（'rest'）是上面那一趟 list 真实掉到 REST 通道才带回来的事实 —— 界面层永远不许写它
