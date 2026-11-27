@@ -243,8 +243,7 @@ export function emitParentFallback(
   outcome: string,
   startedAt?: number,
 ): void {
-  const logCtx = ctx && typeof ctx.logEvent === 'function' ? (ctx as LoggerCtx) : null
-  guardEmit(logCtx, (c) => {
+  guardEmit(ctx as LoggerCtx | null | undefined, (c) => {
     c.logEvent('debug', 'gitee.parent.fallback', {
       op: String(trip.op || ''),
       key: trip.key,
@@ -256,7 +255,7 @@ export function emitParentFallback(
       latencyMs: ms(startedAt ? Date.now() - startedAt : 0),
       opId: String(c.opId || ''),
     })
-  }, () => debugOn(logCtx))
+  }, () => debugOn(ctx))
 }
 
 /**
@@ -291,8 +290,7 @@ export function emitBlockedByFallback(
   outcome: string,
   startedAt?: number,
 ): void {
-  const logCtx = ctx && typeof ctx.logEvent === 'function' ? (ctx as LoggerCtx) : null
-  guardEmit(logCtx, (c) => {
+  guardEmit(ctx as LoggerCtx | null | undefined, (c) => {
     c.logEvent('debug', 'gitee.blockedBy.fallback', {
       key: String(key || ''),
       wanted: trip.wanted,
@@ -306,7 +304,7 @@ export function emitBlockedByFallback(
       latencyMs: ms(startedAt ? Date.now() - startedAt : 0),
       opId: String(c.opId || ''),
     })
-  }, () => debugOn(logCtx))
+  }, () => debugOn(ctx))
 }
 
 /**
@@ -328,8 +326,7 @@ export function emitBodyFallbackRead(
   complete: boolean,
   startedAt?: number,
 ): void {
-  const logCtx = ctx && typeof ctx.logEvent === 'function' ? (ctx as LoggerCtx) : null
-  guardEmit(logCtx, (c) => {
+  guardEmit(ctx as LoggerCtx | null | undefined, (c) => {
     c.logEvent('debug', 'gitee.bodyFallback.read', {
       op,
       key: String(key || ''),
@@ -341,7 +338,7 @@ export function emitBodyFallbackRead(
       latencyMs: ms(startedAt ? Date.now() - startedAt : 0),
       opId: String(c.opId || ''),
     })
-  }, () => debugOn(logCtx))
+  }, () => debugOn(ctx))
 }
 
 export default {
