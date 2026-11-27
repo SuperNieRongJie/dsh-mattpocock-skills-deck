@@ -30,7 +30,7 @@
 | --- | --- | --- |
 | 快档（只跑一扇或几扇） | `node --import ./scripts/ts-hook.mts tests/verify-xxx.ts`；按名字抽查用 `node scripts/verify-chain.ts --only <文件名里的一段>` | 写代码的过程中，改一处验一处 |
 | 受影响档（只跑这次改动碰得到的门禁） | `npm run verify:changed`（读 git 里这次的改动清单）或 `node scripts/lib/select-gates.mts <改了哪些文件...>`（自己报改动清单） | 一个模块写完、提交之前自查 |
-| 全链档（约三百步主链 + 末尾五条冒烟） | `npm run verify:parallel`（8 路并发跑主链，红也跑完再汇总，失败的那几步会自动串行重跑一次以排除互相干扰；主链跑完后按 `package.json` 的 `scripts.smoke` 顺序串行跑五条冒烟，冒烟红也算整体红） | 提交之前、推送之前，**每次都要跑** |
+| 全链档（约三百步主链 + 末尾五条冒烟） | `npm run verify:parallel`（默认 4 路并发跑主链，`--jobs N` 可显式调大，红也跑完再汇总，失败的那几步会自动串行重跑一次以排除互相干扰；主链跑完后按 `package.json` 的 `scripts.smoke` 顺序串行跑五条冒烟，冒烟红也算整体红） | 提交之前、推送之前，**每次都要跑** |
 | 全链·串行 | `node scripts/verify-chain.ts`（第一扇红了就停，方便先修）或 `node scripts/verify-all.mts`（全部跑完再汇总） | 想按顺序看输出、或者并发下出过怪事时用 |
 
 2026-10-26 起，远端不再承担验证裁决职责：`.github/workflows/verify.yml` 已下掉（#1542），推送 main 与开 PR 都不再自动跑验证。本地验证是唯一的裁决口径，规则是三条：本地跑链必须用 Node 24.15 及以上版本（在 Node 22 上跑链本身就是 #1523 记录的装载故障）；`npm run verify:parallel` 是唯一的裁决入口，提交前与推送前每次都要跑它（#1643 起它一次盖住主链与五条冒烟，`npm test` 与 `npm run test:smoke` 仍然可用，但都不是裁决入口）；合并前要求除登记在案的已知红之外，全链真红为 0（例如 #1541 跟踪的那几道与 Node 版本无关的失败）。这三条的来龙去脉见 `docs/adr/20261026-cancel-ci-verify.md`。
@@ -43,6 +43,10 @@
 冒烟阶段（#1643）排在主链与「红的步骤串行复跑」之后：五条按 `scripts.smoke` 的顺序串行跑（其中一条会临时切换工作目录，顺序不能乱），不再参与并发的假红复跑。`--only`、`--changed` 抽查和主链首红即停时它不跑，并在汇总里明写「冒烟阶段：没跑（原因）」——「没跑」永远是明说的，不能让人从输出里猜。机器读的结果写在 `--json` 的 `smoke` 栏（`ran` / `reason` / `red` / 逐条结果）。
 
 本机既有的红登记在 `tests/fixtures/known-reds.json`（#3）：它们照常出现在汇总里，每条带文件名、票号、失败断言与原因，但不把退出码判红；只有「新红」与冒烟真红才判失败。`--json` 顶层 `red` 因此是「新红加冒烟」，`newRed`、`knownRed`、`knownRedFiles` 分列，`chainRed` 仍是主链红的原始总数（含已登记红）。登记表读不了时按空表处理，所有红都算新红，绝不会因为登记表坏掉而把真红吞掉。
+
+收尾复验时想少等那几步，用 `--skip-known-reds`（#13）：登记表里的既有红整步不跑，跳过的步数与文件名写进汇总（「按 --skip-known-reds 跳过 N 步」）与 `--json` 的 `knownRedSkipped` / `skippedKnownFiles` 两栏，不会静默少跑。
+
+并发默认值 2026-11-27 起由 8 路降到 4 路（#13）：8 路时 `verify-1586-*` 一族各自真建临时 git 仓库，互相抢资源，预检拿不到票据就抛 `reading 'id'` / `reading 'branch'`，同一棵树连跑四趟都凑不齐「新红 0」；4 路两趟都稳定全绿。慢步多在空等，核多时仍可用 `--jobs` 调高。
 
 **每一档测不出什么**：
 

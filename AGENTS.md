@@ -68,7 +68,7 @@ Single-context layout — root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/
 
 - 改一处、验一处：只跑那一扇——`node --import ./scripts/ts-hook.mts tests/verify-xxx.ts`；按名字抽查用 `node scripts/verify-chain.ts --only <文件名里的一段>`。
 - 一个模块写完：`npm run verify:changed`（只跑这次改动影响得到的门禁，几十秒量级）。
-- 提交前：`npm run verify:parallel`（全链、8 路并发，主链跑完再串行跑五条冒烟，构建缓存就绪时约 1 分钟）。串行全链 `node scripts/verify-chain.ts` 只在排查顺序问题时用。
+- 提交前：`npm run verify:parallel`（全链、默认 4 路并发（`--jobs N` 可调高），主链跑完再串行跑五条冒烟；2026-11-27 本机实测 4 路 747–912 秒，耗时与机器、链长有关）。收尾复验要跳过已登记的既有红时加 `--skip-known-reds`。串行全链 `node scripts/verify-chain.ts` 只在排查顺序问题时用。
 
 动到 `tests/**`、`scripts/**`、`docs/**` 或任何 `*.md` 时，挑选规则会判「必须全链」，这是故意的，不是 bug。档位怎么选、各档测不出什么、读一扇两千行门禁怎么省上下文，都见 `docs/agents/verification.md`。
 

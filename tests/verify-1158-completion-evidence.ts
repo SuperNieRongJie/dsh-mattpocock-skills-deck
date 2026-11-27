@@ -306,6 +306,49 @@ console.log('丁）三条执行器的端到端（临时夹具仓库）')
       '抽查档位 --list：提前说明冒烟阶段会被跳过，不把名单说成会跑',
     )
   }
+  // #13 A：默认并发封顶 4 路（8 路会让 verify-1586-* 一族互相抢临时 git 仓库，四趟都凑不齐新红 0）。
+  // 夹具仓所在机器核数不定，所以按执行器同一条公式算期望值：断言「打印的档位等于公式值，且写明这是默认」——
+  // 核数真够 4 核时，这一条就等于「默认 4 路」。显式 --jobs 必须还能调，默认改小不许把调高的路堵死。
+  {
+    const expectedJobs: number = Math.max(1, Math.min(4, Math.max(2, os.cpus().length - 1)))
+    const r = run('scripts/verify-parallel.mts', ['--list'])
+    const out = String(r.stdout || '') + String(r.stderr || '')
+    check(
+      out.includes('并发 ' + expectedJobs + ' 路') && out.includes('默认'),
+      '默认并发按 #13 的公式封顶 4 路（本机 ' + os.cpus().length + ' 核 → ' + expectedJobs + ' 路），并写明这是默认值',
+    )
+    const r2 = run('scripts/verify-parallel.mts', ['--list', '--jobs', '7'])
+    const out2 = String(r2.stdout || '') + String(r2.stderr || '')
+    check(out2.includes('并发 7 路（--jobs 指定）'), '显式 --jobs 7 覆盖默认值并标明是命令行指定的（调高的路没被默认值堵死）')
+  }
+  // #13 B：--skip-known-reds 整步跳过登记表里的既有红；跳过的步数进汇总与 --json，不许静默少跑。
+  {
+    fs.mkdirSync(path.join(tmpRoot, 'tests', 'fixtures'), { recursive: true })
+    fs.writeFileSync(
+      path.join(tmpRoot, 'tests', 'fixtures', 'known-reds.json'),
+      JSON.stringify({ entries: [{ file: 'tests/verify-gate-b.js', ticket: 13, reason: '夹具：假装这扇是本机既有红' }] }, null, 2),
+    )
+    const r = run('scripts/verify-parallel.mts', ['--list', '--skip-known-reds'])
+    const out = String(r.stdout || '') + String(r.stderr || '')
+    check(out.includes('已按 --skip-known-reds 跳过 1 步'), '--skip-known-reds 的 --list 明说跳过了 1 步，不把少跑藏在名单里')
+    check(!/^ {2}tests\/verify-gate-b\.js$/m.test(out), '--skip-known-reds 的 --list 里不再列出被跳过的那一扇（gate-b）')
+    // 真跑一趟：登记的那扇不跑，汇总与 --json 各有一栏跳过数；夹具其余步骤全绿，退出码 0。
+    smokeGateSrc("const { printGateResult } = require('../tests/lib/gate-result.ts')\nprintGateResult('verify-gate-s', 4, 0)\nprocess.exit(0)\n")
+    const rt = run('scripts/verify-parallel.mts', ['--skip-known-reds', '--json', 'skip-result.json'])
+    const outt = String(rt.stdout || '') + String(rt.stderr || '')
+    check(rt.status === 0, '--skip-known-reds 真跑一趟：整体退出码 0（实际 ' + rt.status + '）')
+    check(outt.includes('；新红 0 步，已登记红 0 步，按 --skip-known-reds 跳过 1 步'), '--skip-known-reds 真跑一趟：汇总里把跳过数与新红、已登记红分开写清')
+    let json: any = null
+    try {
+      json = JSON.parse(fs.readFileSync(path.join(tmpRoot, 'skip-result.json'), 'utf8'))
+    } catch (e) {
+      json = null
+    }
+    check(
+      !!json && json.knownRedSkipped === 1 && Array.isArray(json.skippedKnownFiles) && json.skippedKnownFiles.includes('tests/verify-gate-b.js'),
+      '--skip-known-reds 真跑一趟：--json 里 knownRedSkipped=1 且列出被跳过的文件名',
+    )
+  }
   fs.rmSync(tmpRoot, { recursive: true, force: true })
 }
 

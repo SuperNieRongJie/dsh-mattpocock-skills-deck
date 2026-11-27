@@ -7,8 +7,10 @@
 // 同一批 17 步并发实测墙钟 63.5 秒（等于最慢那一步），串行是 425.5 秒。
 //
 // 用法：
-//   node scripts/verify-parallel.mts                 # 全链，默认 8 路并发，遇红继续跑完并汇总
-//   node scripts/verify-parallel.mts --jobs 16       # 加并发（慢步多在等，核多就调大）
+//   node scripts/verify-parallel.mts                 # 全链，默认并发封顶 4 路，遇红继续跑完并汇总
+//   node scripts/verify-parallel.mts --jobs 8        # 显式调大并发（慢步多在等，核多就调大；默认为什么是 4 见 #13）
+//   node scripts/verify-parallel.mts --skip-known-reds  # 跳过 tests/fixtures/known-reds.json 里登记的既有红（#13）
+//   node scripts/verify-parallel.mts --skip-known-reds --jobs 4 --json out.json  # 收尾复验常用的一趟
 //   node scripts/verify-parallel.mts --tier fast     # 跳过真浏览器的步骤（日常用）
 //   node scripts/verify-parallel.mts --changed       # 只跑「本次改动影响到」的步骤（见 scripts/lib/select-gates.mts）
 //   node scripts/verify-parallel.mts --only log --only 1003   # 只跑文件名含这些子串的步骤
@@ -246,6 +248,40 @@ if (expectations.byFile.size && !evidenceSteps.length) {
   process.exit(1)
 }
 
+// 已登记红（#3）：只按文件名匹配。登记表读不了时按空表处理并在摘要说明——
+// 保守方向是「把红都当新红」，绝不会因为登记表坏掉而把真红吞掉。
+// 它同时给 --skip-known-reds（#13）用，所以要在筛步骤之前读：读晚了，--list 就看不见跳过效果。
+interface KnownRedEntry {
+  file: string
+  ticket?: number
+  failures?: string
+  reason: string
+  condition?: string
+}
+const KNOWN_REDS_PATH: string = path.join(ROOT, 'tests/fixtures/known-reds.json')
+const knownReds = new Map<string, KnownRedEntry>()
+let knownRedsProblem: string = ''
+try {
+  const raw = JSON.parse(fs.readFileSync(KNOWN_REDS_PATH, 'utf8')) as { entries?: KnownRedEntry[] }
+  for (const entry of raw.entries || []) {
+    if (entry && typeof entry.file === 'string' && entry.file) knownReds.set(entry.file, entry)
+  }
+} catch (e) {
+  // 没有登记表是正常的（夹具仓、还没登记过红的仓库）：按空表处理，不算问题。
+  const code: string = e && typeof e === 'object' && 'code' in e ? String((e as { code?: string }).code) : ''
+  if (code !== 'ENOENT') knownRedsProblem = e instanceof Error ? e.message : String(e)
+}
+if (knownRedsProblem) console.log('[并行门禁] 已登记红表读不了，按空表处理：' + knownRedsProblem)
+
+// 并发档位（#13）：默认封顶 4 路。为什么不是「核数减一」：verify-1586-* 一族会各自真建临时 git 仓库，
+// 8 路并发时它们互相抢资源，预检拿不到票据就抛 reading 'id' / reading 'branch'，同一棵树连着四趟
+// 都凑不齐「新红 0」（#13 正文与 docs/agents/verification.md 有实测记录）。慢步多在空等，核多时
+// 仍可用 --jobs 显式调大；这里只把默认值调稳，不封死人调高的路。
+const jobsDefault: number = Math.min(4, Math.max(2, os.cpus().length - 1))
+const jobs: number = Math.max(1, Number(optOf('--jobs', String(jobsDefault))) || jobsDefault)
+const jobsExplicit: boolean = has('--jobs')
+console.log('[并行门禁] 并发 ' + jobs + ' 路' + (jobsExplicit ? '（--jobs 指定）' : '（默认：本机 ' + os.cpus().length + ' 核，封顶 4 路；--jobs 可调）'))
+
 const only: string[] = allOf('--only')
 const tier: string = optOf('--tier', 'full')
 let steps: GateStep[] = steps0
@@ -259,6 +295,13 @@ if (has('--changed')) {
     const set = new Set(picked)
     steps = steps.filter((s) => set.has(s.file))
   }
+}
+// --skip-known-reds（#13）：收尾复验时整步跳过已登记的既有红，省掉那几步的等待。
+// 跳过的步数与文件名要进汇总与 --json：让人读结果时知道「这趟没跑哪几步」，不能静默少跑。
+let skippedKnown: string[] = []
+if (has('--skip-known-reds')) {
+  skippedKnown = steps.filter((s) => knownReds.has(s.file)).map((s) => s.file)
+  steps = steps.filter((s) => !knownReds.has(s.file))
 }
 
 // ---------------------------------------------------------------------------
@@ -296,6 +339,7 @@ const smokePlanned = smokePlan()
 if (has('--list')) {
   console.log('将要跑 ' + steps.length + ' 步（全链 ' + steps0.length + ' 步）：')
   for (const s of steps) console.log('  ' + s.file)
+  if (skippedKnown.length) console.log('已按 --skip-known-reds 跳过 ' + skippedKnown.length + ' 步（登记表 tests/fixtures/known-reds.json）：' + skippedKnown.join('、'))
   if (smokePlanned.error) console.log('冒烟阶段读不出来：' + smokePlanned.error)
   else {
     console.log('冒烟阶段（主链跑完后按 scripts.smoke 的顺序串行跑 ' + smokePlanned.steps.length + ' 步）：')
@@ -318,8 +362,6 @@ if (!steps.length) {
   console.log('[并行门禁] 冒烟阶段：没跑（' + why + '）')
   process.exit(0)
 }
-
-const jobs: number = Math.max(1, Number(optOf('--jobs', String(Math.min(8, Math.max(2, os.cpus().length - 1))))) || 8)
 
 // 排程：同组互斥的步骤合成一节「车厢」，一节车厢占一个工人、车厢里的步骤依次跑；
 // 其余步骤各自成一节。然后按上一轮实测耗时从长到短排（LPT）——最长的先开工，
@@ -551,26 +593,7 @@ if (failed.length && !has('--no-retry-failed')) {
   failed = results.filter((r) => r.code !== 0 && !r.optional)
 }
 
-// 已登记红（#3）：只按文件名匹配。登记表读不了时按空表处理并在摘要说明——
-// 保守方向是「把红都当新红」，绝不会因为登记表坏掉而把真红吞掉。
-interface KnownRedEntry {
-  file: string
-  ticket?: number
-  failures?: string
-  reason: string
-  condition?: string
-}
-const KNOWN_REDS_PATH: string = path.join(ROOT, 'tests/fixtures/known-reds.json')
-const knownReds = new Map<string, KnownRedEntry>()
-let knownRedsProblem: string = ''
-try {
-  const raw = JSON.parse(fs.readFileSync(KNOWN_REDS_PATH, 'utf8')) as { entries?: KnownRedEntry[] }
-  for (const entry of raw.entries || []) {
-    if (entry && typeof entry.file === 'string' && entry.file) knownReds.set(entry.file, entry)
-  }
-} catch (e) {
-  knownRedsProblem = e instanceof Error ? e.message : String(e)
-}
+// 已登记红的登记表在上面筛步骤之前读过（--skip-known-reds 要用），这里只做新红/已登记红的拆分。
 const knownFailed: StepResult[] = failed.filter((r) => knownReds.has(r.file))
 const newFailed: StepResult[] = failed.filter((r) => !knownReds.has(r.file))
 // 登记过、这趟却绿了的步骤：只提示可删除，不判失败。部分红与并发负载有关（例如计时边界），
@@ -578,8 +601,6 @@ const newFailed: StepResult[] = failed.filter((r) => !knownReds.has(r.file))
 const staleKnown: string[] = [...knownReds.keys()].filter(
   (file) => steps.some((s) => s.file === file) && !failed.some((r) => r.file === file),
 )
-if (knownRedsProblem) console.log('[并行门禁] 已登记红表读不了，按空表处理：' + knownRedsProblem)
-
 // 冒烟阶段（#1643）：主链与复跑都完事之后再跑，读的是构建产物、不受并发干扰。
 // 跳过时把理由打出来 —— 「没跑」必须是明说的，不能让人从输出里猜。
 function narrowSkipReason(): string {
@@ -627,8 +648,8 @@ const slow = [...results].sort((a, b) => b.ms - a.ms).slice(0, 10)
 console.log('')
 // 预构建不是链上的步骤，算总数时把它摘出去（它自己的耗时照旧打在明细里）。
 const chainRan: number = results.filter((r) => steps.some((s) => s.file === r.file)).length
-console.log('[并行门禁] 跑完 ' + chainRan + '/' + steps.length + ' 步，墙钟 ' + (wall / 1000).toFixed(1) + ' 秒；新红 ' + newFailed.length + ' 步，已登记红 ' + knownFailed.length + ' 步')
-console.log('[并行门禁] 判定：主链新红 ' + newFailed.length + ' 步，已登记红 ' + knownFailed.length + ' 步，冒烟真红 ' + smokeRedTotal + ' 步' + (smokeSkip ? '（冒烟阶段没跑：' + smokeSkip + '）' : ''))
+console.log('[并行门禁] 跑完 ' + chainRan + '/' + steps.length + ' 步，墙钟 ' + (wall / 1000).toFixed(1) + ' 秒；新红 ' + newFailed.length + ' 步，已登记红 ' + knownFailed.length + ' 步' + (skippedKnown.length ? '，按 --skip-known-reds 跳过 ' + skippedKnown.length + ' 步' : ''))
+console.log('[并行门禁] 判定：主链新红 ' + newFailed.length + ' 步，已登记红 ' + knownFailed.length + ' 步，冒烟真红 ' + smokeRedTotal + ' 步' + (skippedKnown.length ? '，跳过已登记红 ' + skippedKnown.length + ' 步' : '') + (smokeSkip ? '（冒烟阶段没跑：' + smokeSkip + '）' : ''))
 // 已登记红照常列出来：人要看得到它们还在红、为什么可以不算新红，不能只剩一个数字。
 if (knownFailed.length) {
   console.log('  已登记红（不计入失败，登记表 tests/fixtures/known-reds.json）：')
@@ -688,6 +709,10 @@ if (has('--json')) {
             newRed: newFailed.length,
             knownRed: knownFailed.length,
             knownRedFiles: knownFailed.map((r) => r.file),
+            // 被 --skip-known-reds 整步跳过的那些：与 knownRed 分开记，读结果的人才分得清
+            // 「这趟没跑」与「跑了但是红」是两件事（#13 的验收要求：汇总与 --json 各有一栏）。
+            knownRedSkipped: skippedKnown.length,
+            skippedKnownFiles: skippedKnown,
             flaky: flaky.length,
             results: results.map((r) => ({ file: r.file, code: r.code, ms: r.ms, at: r.at, exitCode: r.exitCode != null ? r.exitCode : r.code, evidence: r.evidence || '' })),
             smoke: {
