@@ -283,6 +283,45 @@ check(
   `这些文件还写死了带冒号的标签名：${stillHardcoded.join('、')}`,
 )
 
+// 第六节：登记说「结构做不到、靠正文兜底」，读侧就必须真的把正文读回来（#7）
+//
+// 这一节守的是「登记表与读侧各说一套」：登记写着父子与阻塞关系只能走票面正文，
+// 读侧却只认结构字段的话，用户看到的就是「票上写了上级地图，面板里却没有父票」。
+// 反过来，结构字段真有值时必须优先，不能让正文里可能过时的旧行盖掉远端真账。
+const registerEntries = register as unknown as Record<string, { tier: string; gap?: string; ticket?: string }>
+const bodyFallbackEntries = ['setParent', 'setBlockedBy', 'getDependencies']
+const notPartial = bodyFallbackEntries.filter((key) => registerEntries[key]?.tier !== 'partial')
+check(
+  notPartial.length === 0,
+  '父子、阻塞、依赖查询三条登记为 partial：结构上做不到，只能靠正文兜底',
+  `这些条目没有如实登记成 partial：${notPartial.join('、')}`,
+)
+const noGap = bodyFallbackEntries.filter((key) => !registerEntries[key]?.gap || !registerEntries[key]?.ticket)
+check(
+  noGap.length === 0,
+  'partial 的三条都写清了缺口与承接票号（不让人对着一个「做不了」干瞪眼）',
+  `这些条目缺 gap 或 ticket：${noGap.join('、')}`,
+)
+
+const bodyOnlyParent = normalizeMod.normalizeIssue({ number: 1, title: '一张票', state: 'open', body: '上级地图：#123\n\n正文' })
+check(
+  bodyOnlyParent.parentKey === '123' && bodyOnlyParent.parentSource === 'body',
+  '只有正文写了「上级地图：#123」时，读侧把父票读回来并标明来源是正文',
+  `父票读错了：parentKey=${JSON.stringify(bodyOnlyParent.parentKey)}，parentSource=${JSON.stringify(bodyOnlyParent.parentSource)}`,
+)
+const structuralParent = normalizeMod.normalizeIssue({ number: 1, title: '一张票', state: 'open', parentKey: '999', body: '上级地图：#123' })
+check(
+  structuralParent.parentKey === '999' && structuralParent.parentSource === 'structure',
+  '远端结构字段有父票时以它为准，正文里过时的旧行不能盖掉它',
+  `结构字段没有优先：parentKey=${JSON.stringify(structuralParent.parentKey)}，parentSource=${JSON.stringify(structuralParent.parentSource)}`,
+)
+const bodyBlocked = normalizeMod.normalizeIssue({ number: 1, title: '一张票', state: 'open', body: '正文\n\n## Blocked by\n- 先做（#456）\n' })
+check(
+  bodyBlocked.blockedBy[0]?.key === '456' && bodyBlocked.blockedBySource === 'body',
+  '正文「## Blocked by」小节能读回阻塞边并标明来源是正文',
+  `阻塞边读错了：blockedBy=${JSON.stringify(bodyBlocked.blockedBy)}，blockedBySource=${JSON.stringify(bodyBlocked.blockedBySource)}`,
+)
+
 console.log('')
 if (failures.length > 0) {
   console.log(`✗ Gitee 房结构与纪律门禁失败：${failures.length} 项（共 ${checks} 项检查）`)
