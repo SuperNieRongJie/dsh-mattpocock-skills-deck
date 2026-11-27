@@ -89,17 +89,17 @@ export async function getDependencies(
         continue
       }
       // 清单里没这张票时再单票读一次：票可能刚好被过滤掉，也可能清单翻页时漏了。
-      const one = rows ? null : await readOne(effective, refId, entry.key)
+      // 这两条路都走这一趟单票读，不因为「整仓清单列成功了」就当作「这张票没有状态」。
+      const one = await readOne(effective, refId, entry.key)
       if (one) {
         blockedBy.push(refOf(one))
         continue
       }
-      // 读不出标题与状态时仍然保留这条关系（正文说了它存在），只是别谎称状态已知。
+      // 读不出标题与状态时仍然保留这条关系（正文说了它存在），但这次确实没读全，要如实标出来：
+      // 把「没读到」写成「没有状态」，读的人会当成这张票真的没有状态。
       blockedBy.push({ key: entry.key, title: entry.title })
-      if (!rows) {
-        blockedByComplete = false
-        notes.push('被阻塞的 #' + entry.key + ' 读不出标题与状态（列全仓票面也失败了）')
-      }
+      blockedByComplete = false
+      notes.push('被阻塞的 #' + entry.key + ' 读不出标题与状态（' + (rows ? '整仓清单里没这张票，单票也没读回来' : '列全仓票面失败，单票也没读回来') + '）')
     }
 
     const blocking: IssueRef[] = []
@@ -114,8 +114,13 @@ export async function getDependencies(
       }
       for (const row of listed.data) {
         if (row.key === wantedKey) continue
-        const blocked = (row.blockedBy || []).some((ref) => ref.key === wantedKey)
-        if (blocked) blocking.push(refOf(row))
+        const blocksMe = (row.blockedBy || []).some((ref) => ref.key === wantedKey)
+        if (!blocksMe) continue
+        // 这条反向边住在**别人**的票正文里，来源也照着那一列标：上层要能说清「我挡住了谁」是从
+        // 谁的正文扫出来的。本票自己没有被阻塞时，它没有 blockedBySource 可借，所以来源挂在边上。
+        const ref = refOf(row)
+        if (row.blockedBySource) ref.source = row.blockedBySource
+        blocking.push(ref)
       }
     }
 

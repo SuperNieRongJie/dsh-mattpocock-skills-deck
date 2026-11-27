@@ -19,8 +19,9 @@
  * 否则写后读回只能证明 parentKey 有值，分不出远端到底认没认 parent_id。
  *
  * 被阻塞关系没有结构来源：Gitee 压根没有这个字段，所以它只能从正文末尾的 `## Blocked by` 小节读，
- * 读到了就挂 blockedBySource = 'body'。契约的 Issue 没有来源这一列，所以这里只挂房层的附加属性，
- * 契约字段 blockedBy 照旧是 IssueRef 数组，别处读 blockedBy 不用关心来源。
+ * 读到了就挂 blockedBySource = 'body'。来源这两列住在契约的 Issue 上（父子的 parentSource、
+ * 阻塞的 blockedBySource），房层不再自己加字段；别处读 blockedBy 照旧不用关心来源，
+ * 要标明来源时才读这两格。
  */
 import type { Comment, Issue, Label, Milestone } from '../../../contract/entities.js'
 import type { Actor, IssueType, State } from '../../../contract/identity.js'
@@ -176,14 +177,11 @@ function keyFromParentUrl(raw: unknown): string | null {
   return tail
 }
 
-/** 父票的来源：远端结构字段，或者票正文里那行兜底文字。 */
-export type ParentSource = 'structure' | 'body'
-
 /**
- * 归一后的票多挂两格来源。契约的 Issue 没有这些列，写法照 GitHub 房挂 parentError 的先例。
- * blockedBySource 只有 'body' 这一种取值：被阻塞关系在 Gitee 上只可能来自票正文。
+ * 父票的来源：远端结构字段，或者票正文里那行兜底文字。
+ * 取值不重抄一遍，直接取契约 Issue 上那一格，免得两处各写一份、日后改一处漏一处。
  */
-export type GiteeIssue = Issue & { parentSource?: ParentSource; blockedBySource?: 'body' }
+export type ParentSource = NonNullable<Issue['parentSource']>
 
 /**
  * 推出父票票号与它的来源。结构字段优先；结构字段没有值时才读正文，两边都没有就给 null。
@@ -214,7 +212,7 @@ export function normalizeIssue(raw: unknown): Issue {
   const key = deriveKey(bag)
   const parent = deriveParent(bag, body)
   const blockedBy = blockedByEntriesFromBody(body).map((entry) => ({ key: entry.key, title: entry.title }))
-  const issue: GiteeIssue = {
+  const issue: Issue = {
     key,
     effortId: '',
     type: deriveType(bag, body, labels),

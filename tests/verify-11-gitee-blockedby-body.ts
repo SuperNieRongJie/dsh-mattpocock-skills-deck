@@ -257,6 +257,8 @@ async function main() {
     ledger.syncServer('github', { rest: { limit: 5000, remaining: 5000, reset: clock + 3600000 }, graphql: { limit: 5000, remaining: 5000, reset: clock + 3600000 } }, clock)
     const registry = registryMod.createRegistry({ logEvent: () => {}, isEnabled: () => false }, { matchesTimeout: 200 })
     let row: any = null
+    // 反向边的来源标注要能逐案开关：D9 验「没标来源的后端回执一字不变」，D7/D10 验「标了来源就写出来」。
+    let blockingEdges: any[] = [{ key: '91', title: '下游票九十一', state: 'open', source: 'body' }]
     const stub = {
       id: 'stub-11-get', label: '桩（阻塞来源标注）', matches: async () => false,
       budget: { kind: 'off-network', countsRequests: false, countsPoints: false, independentBuckets: false },
@@ -264,7 +266,7 @@ async function main() {
         id: 'stub-11-get',
         async get(repoArg: any, key: string) { return { ok: true, data: row } },
         async getDependencies() {
-          return { ok: true, data: { blockedBy: [{ key: '8', title: '阻塞票八', state: 'open' }, { key: '9', title: '阻塞票九', state: 'closed' }], blocking: [{ key: '91', title: '下游票九十一', state: 'open' }], blockedByComplete: true, blockingComplete: true, blockingSource: 'scan' } }
+          return { ok: true, data: { blockedBy: [{ key: '8', title: '阻塞票八', state: 'open' }, { key: '9', title: '阻塞票九', state: 'closed' }], blocking: blockingEdges, blockedByComplete: true, blockingComplete: true, blockingSource: 'scan' } }
         },
       }),
     }
@@ -284,9 +286,16 @@ async function main() {
       check(String(res.text).indexOf('被阻塞 2 条（来源：正文）') >= 0, 'D6 抬头写清被阻塞关系来自正文：' + String(res.text).slice(0, 90))
       check(String(res.text).indexOf('阻塞别人 1 条（来源：正文）') >= 0, 'D7 反向关系也标来源正文（扫票面扫出来的）')
       check(String(res.data.landings.caveat).indexOf('## Blocked by') >= 0 && String(res.data.landings.caveat).indexOf('来源：正文') >= 0, 'D8 注记说清落在票正文末尾的小节上')
+      blockingEdges = [{ key: '91', title: '下游票九十一', state: 'open' }]
       row = { key: '90', title: '实施票九十', state: 'open', type: 'issue', body: '正文', url: '', labels: [], assignees: [], parentKey: null, blockedBy: [{ key: '8' }] }
       const plain = await getTool.run(exec, { key: '90' })
       check(plain.data.landings.blockedBy === rules.EDGE_LANDING.CONTRACT_BLOCK_FIELD && String(plain.text).indexOf('来源：') < 0, 'D9 没标来源的后端回执与今天一模一样（不出现来源标注）')
+      // F4：本票自己没被谁挡住（blockedBy 为空、没有 blockedBySource），但反向边是从别人正文扫出来的。
+      // 这时「阻塞了谁」的来源只能看边上自己的标注，借本票那一格就说不出话。
+      blockingEdges = [{ key: '91', title: '下游票九十一', state: 'open', source: 'body' }]
+      row = { key: '90', title: '实施票九十', state: 'open', type: 'issue', body: '正文', url: '', labels: [], assignees: [], parentKey: null, blockedBy: [] }
+      const onlyReverse = await getTool.run(exec, { key: '90' })
+      check(String(onlyReverse.text).indexOf('阻塞别人 1 条（来源：正文）') >= 0 && String(onlyReverse.text).indexOf('被阻塞 0 条（来源') < 0, 'D10 只挡别人、自己没被阻塞时，反向关系照样标来源正文：' + String(onlyReverse.text).slice(0, 90))
       disp.dispose()
     }
   }

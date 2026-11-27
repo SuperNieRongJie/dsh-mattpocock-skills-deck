@@ -16,7 +16,6 @@ import { GITEE_READ_TIMEOUT_MS } from '../../../../shared/time-config/src/values
 import { failGitee } from '../errors.js'
 import { requestIssueUpdate } from '../requests.js'
 import { normalizeIssue } from '../model/normalize.js'
-import type { GiteeIssue } from '../model/normalize.js'
 import { withParentLine } from '../model/parent-line.js'
 import { repoNameOf, repoRefId } from '../support/repo-ref.js'
 import { normalizePatchReply } from './patch-reply.js'
@@ -34,10 +33,10 @@ export async function resolveParentId(opCtx: GiteeCtx, refId: string, parentKey:
 }
 
 /** 读回一张票并归一；读失败回 null（调用方据此区分「没读回来」与「读回来了、边不在」）。 */
-async function readBackIssue(effective: GiteeCtx, refId: string, key: string): Promise<GiteeIssue | null> {
+async function readBackIssue(effective: GiteeCtx, refId: string, key: string): Promise<Issue | null> {
   try {
     const raw = await fetchIssueRaw(effective, refId, key)
-    return raw.ok ? (normalizeIssue(raw.bag) as GiteeIssue) : null
+    return raw.ok ? (normalizeIssue(raw.bag)) : null
   } catch (err) {
     return null
   }
@@ -54,7 +53,7 @@ async function writeParentBodyLine(
   refId: string,
   issue: Issue,
   parent: string,
-): Promise<{ ok: true; issue: GiteeIssue } | { ok: false; message: string }> {
+): Promise<{ ok: true; issue: Issue } | { ok: false; message: string }> {
   const body = withParentLine(issue.body, parent)
   let writeProblem = ''
   try {

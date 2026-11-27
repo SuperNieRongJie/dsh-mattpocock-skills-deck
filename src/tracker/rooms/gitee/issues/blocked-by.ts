@@ -21,7 +21,6 @@ import { fail } from '../../../kernel/preflight.js'
 import { GITEE_READ_TIMEOUT_MS } from '../../../../shared/time-config/src/values.js'
 import { failGitee } from '../errors.js'
 import { normalizeIssue } from '../model/normalize.js'
-import type { GiteeIssue } from '../model/normalize.js'
 import { withBlockedBySection } from '../model/blocked-by-section.js'
 import { requestIssueUpdate } from '../requests.js'
 import { repoNameOf, repoRefId } from '../support/repo-ref.js'
@@ -30,7 +29,7 @@ import { fetchIssueRaw } from './read.js'
 type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
 export type Repo = Partial<RepositoryRef> | null | undefined
 
-type ReadOutcome = { ok: true; issue: GiteeIssue } | { ok: false; result: { ok: false; error: unknown } }
+type ReadOutcome = { ok: true; issue: Issue } | { ok: false; result: { ok: false; error: unknown } }
 
 /** 读一张票；同一个票号在一次写里只读一次，环检沿边走访时不会把同一张票翻来覆去地读。 */
 async function readIssueCached(opCtx: GiteeCtx, refId: string, key: string, cache: Map<string, ReadOutcome>): Promise<ReadOutcome> {
@@ -38,7 +37,7 @@ async function readIssueCached(opCtx: GiteeCtx, refId: string, key: string, cach
   if (hit) return hit
   const raw = await fetchIssueRaw(opCtx, refId, key)
   const outcome: ReadOutcome = raw.ok
-    ? { ok: true, issue: normalizeIssue(raw.bag) as GiteeIssue }
+    ? { ok: true, issue: normalizeIssue(raw.bag) }
     : { ok: false, result: raw.result }
   cache.set(key, outcome)
   return outcome
