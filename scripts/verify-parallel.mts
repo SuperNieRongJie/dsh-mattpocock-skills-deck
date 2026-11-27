@@ -20,8 +20,12 @@
 // 冒烟红也算整体红，汇总里分得清「主链红几步、冒烟红几步」。--only / --changed 抽查与主链首红即停时
 // 不跑冒烟，并在汇总里明说「冒烟阶段：没跑（原因）」——「没跑」永远是明说的，不许静默跳过。
 //
-// 退出码：全部通过 0；有失败 1。名单走规划函数（目录约定加显式排除表，#1125），
+// 退出码：新红 + 冒烟真红为 0 时 0，否则 1。名单走规划函数（目录约定加显式排除表，#1125），
 // 与串行执行器、逐道汇总读的是同一份，本脚本不另抄一份。
+//
+// #3 起，tests/fixtures/known-reds.json 登记了本机既有的红：它们照常出现在汇总里，但只有
+// 「新红」才把退出码判红。登记表只按文件名匹配，每条都写清失败断言、原因与复现条件；
+// 同一份代码换台机器跑绿了，摘要会提示这一条可以从登记表删掉，不判失败（部分红与并发负载有关）。
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -547,6 +551,35 @@ if (failed.length && !has('--no-retry-failed')) {
   failed = results.filter((r) => r.code !== 0 && !r.optional)
 }
 
+// 已登记红（#3）：只按文件名匹配。登记表读不了时按空表处理并在摘要说明——
+// 保守方向是「把红都当新红」，绝不会因为登记表坏掉而把真红吞掉。
+interface KnownRedEntry {
+  file: string
+  ticket?: number
+  failures?: string
+  reason: string
+  condition?: string
+}
+const KNOWN_REDS_PATH: string = path.join(ROOT, 'tests/fixtures/known-reds.json')
+const knownReds = new Map<string, KnownRedEntry>()
+let knownRedsProblem: string = ''
+try {
+  const raw = JSON.parse(fs.readFileSync(KNOWN_REDS_PATH, 'utf8')) as { entries?: KnownRedEntry[] }
+  for (const entry of raw.entries || []) {
+    if (entry && typeof entry.file === 'string' && entry.file) knownReds.set(entry.file, entry)
+  }
+} catch (e) {
+  knownRedsProblem = e instanceof Error ? e.message : String(e)
+}
+const knownFailed: StepResult[] = failed.filter((r) => knownReds.has(r.file))
+const newFailed: StepResult[] = failed.filter((r) => !knownReds.has(r.file))
+// 登记过、这趟却绿了的步骤：只提示可删除，不判失败。部分红与并发负载有关（例如计时边界），
+// 绿了不等于登记错了；反过来把「绿过」当失败会逼着人反复增删登记。
+const staleKnown: string[] = [...knownReds.keys()].filter(
+  (file) => steps.some((s) => s.file === file) && !failed.some((r) => r.file === file),
+)
+if (knownRedsProblem) console.log('[并行门禁] 已登记红表读不了，按空表处理：' + knownRedsProblem)
+
 // 冒烟阶段（#1643）：主链与复跑都完事之后再跑，读的是构建产物、不受并发干扰。
 // 跳过时把理由打出来 —— 「没跑」必须是明说的，不能让人从输出里猜。
 function narrowSkipReason(): string {
@@ -594,8 +627,18 @@ const slow = [...results].sort((a, b) => b.ms - a.ms).slice(0, 10)
 console.log('')
 // 预构建不是链上的步骤，算总数时把它摘出去（它自己的耗时照旧打在明细里）。
 const chainRan: number = results.filter((r) => steps.some((s) => s.file === r.file)).length
-console.log('[并行门禁] 跑完 ' + chainRan + '/' + steps.length + ' 步，墙钟 ' + (wall / 1000).toFixed(1) + ' 秒；真红 ' + failed.length + ' 步')
-console.log('[并行门禁] 判定：主链真红 ' + failed.length + ' 步，冒烟真红 ' + smokeRedTotal + ' 步' + (smokeSkip ? '（冒烟阶段没跑：' + smokeSkip + '）' : ''))
+console.log('[并行门禁] 跑完 ' + chainRan + '/' + steps.length + ' 步，墙钟 ' + (wall / 1000).toFixed(1) + ' 秒；新红 ' + newFailed.length + ' 步，已登记红 ' + knownFailed.length + ' 步')
+console.log('[并行门禁] 判定：主链新红 ' + newFailed.length + ' 步，已登记红 ' + knownFailed.length + ' 步，冒烟真红 ' + smokeRedTotal + ' 步' + (smokeSkip ? '（冒烟阶段没跑：' + smokeSkip + '）' : ''))
+// 已登记红照常列出来：人要看得到它们还在红、为什么可以不算新红，不能只剩一个数字。
+if (knownFailed.length) {
+  console.log('  已登记红（不计入失败，登记表 tests/fixtures/known-reds.json）：')
+  for (const r of knownFailed) {
+    const entry = knownReds.get(r.file)
+    const ticket = entry && entry.ticket ? '（#' + entry.ticket + '）' : ''
+    console.log('    ' + r.file + ticket + '：' + (entry ? entry.reason : ''))
+  }
+}
+if (staleKnown.length) console.log('  登记表里这些步骤这趟绿了，可以从 tests/fixtures/known-reds.json 删掉：' + staleKnown.map((f) => f.replace('tests/', '')).join('、'))
 const flaky = results.filter((r) => r.flaky)
 if (flaky.length) console.log('  并发假红（复跑已绿）' + flaky.length + ' 步：' + flaky.map((f) => f.file.replace('tests/', '')).join('、'))
 if (slow.length) {
@@ -613,7 +656,7 @@ function printFailureDetail(f: StepResult, title: string): void {
   if (lines.length > 40) console.log('  …（前 ' + (lines.length - 40) + ' 行省略）')
   for (const l of tail) console.log('  ' + l)
 }
-for (const f of failed) printFailureDetail(f, 'FAIL')
+for (const f of newFailed) printFailureDetail(f, 'FAIL')
 for (const f of smokeFailed) printFailureDetail(f, '冒烟 FAIL')
 
 if (has('--json')) {
@@ -638,9 +681,13 @@ if (has('--json')) {
             tier,
             stepsRan: chainRan,
             stepsTotal: steps.length,
-            // red 是整趟的总红数（主链 + 冒烟）；chainRed 单独给出，好让发布脚本分辨是哪一段红了。
-            red: failed.length + smokeRedTotal,
+            // red 是「按裁决口径算红」的总数（新红 + 冒烟），发布脚本拿它判红；
+            // chainRed 是主链红的原始总数（含已登记红），分得清哪一段红了，#3 加的登记不会被它藏掉。
+            red: newFailed.length + smokeRedTotal,
             chainRed: failed.length,
+            newRed: newFailed.length,
+            knownRed: knownFailed.length,
+            knownRedFiles: knownFailed.map((r) => r.file),
             flaky: flaky.length,
             results: results.map((r) => ({ file: r.file, code: r.code, ms: r.ms, at: r.at, exitCode: r.exitCode != null ? r.exitCode : r.code, evidence: r.evidence || '' })),
             smoke: {
@@ -664,4 +711,5 @@ if (has('--json')) {
     }
   }
 }
-process.exit(failed.length + smokeRedTotal ? 1 : 0)
+// 退出码只看新红与冒烟真红：已登记红有原因、有条目，不把整条链永久判红（#3）。
+process.exit(newFailed.length + smokeRedTotal ? 1 : 0)
