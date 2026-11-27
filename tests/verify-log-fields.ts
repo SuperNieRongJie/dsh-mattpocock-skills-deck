@@ -117,10 +117,11 @@ const ALLOWED = {
   //   （上一份快照里有、这一趟开放池里没有的顶票）。为什么要有：「这张票怎么出现在已关闭里」的两种可能
   //   （后端真的回了它 / 本仓按上一份快照补的）只看别的格分不出来；为 0 时说明补行逻辑这一次一张都没补。
   // 2026-11-27（#12）`snapshot.workingSet` 再增补四格 `closedPoolQueries` / `closedPoolRows` / `closedPoolAdded` /
-  //   `closedPoolError`：刷新那一轮多出来的关闭池查询，界面上看不见但每轮都要付。发起次数（0 或 1）、回包条数、
-  //   真补进并集几条、失败档（空串表示没失败）缺一格就问不出「顶部那个数字为什么涨了 / 这一轮为什么没涨」。
-  //   只记计数与枚举，不记票面内容；首屏恒为 0 / 0 / 0 / 空串。
-  'snapshot.workingSet': ['openContainers', 'subIssues', 'subIssuesFailed', 'subIssuesIncomplete', 'closedMapRows', 'closedMapSource', 'carriedClosedRows', 'failed', 'latencyMs', 'closedPoolQueries', 'closedPoolRows', 'closedPoolAdded', 'closedPoolError'],
+  //   `closedPoolError`，2026-11-27 同一轮再增补 `closedPoolIncomplete`：刷新那一轮多出来的关闭池查询，界面上看不见
+  //   但每轮都要付。发起次数（0 到 5，最多翻 5 页）、回包条数、真补进并集几条、失败档（空串表示没失败）、
+  //   这一轮有没有取全（true 表示翻到页数上限还有下一页，或某一页失败）缺一格就问不出「顶部那个数字为什么涨了 /
+  //   这一轮为什么没涨 / 这个数字本身全不全」。只记计数与枚举，不记票面内容；首屏恒为 0 / 0 / 0 / 空串 / false。
+  'snapshot.workingSet': ['openContainers', 'subIssues', 'subIssuesFailed', 'subIssuesIncomplete', 'closedMapRows', 'closedMapSource', 'carriedClosedRows', 'failed', 'latencyMs', 'closedPoolQueries', 'closedPoolRows', 'closedPoolAdded', 'closedPoolError', 'closedPoolIncomplete'],
   // 2026-11-04（#1869）新增常驻 #150～#153 四族 `workspaceSnapshot.*`：面板 issue 数据的权威副本换成
   //   本地 SQLite 快照库之后，「只看日志就能说出走到哪一步」全靠这四族。字段一律只记枚举、计数、耗时
   //   与短散列（工作区根与仓库身份都是 hash，不记路径原文）；`detail` 只放一句话的失败说明。

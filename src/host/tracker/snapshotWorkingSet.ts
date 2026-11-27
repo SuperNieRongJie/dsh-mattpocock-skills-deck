@@ -42,10 +42,20 @@ const CLOSED_MAP_PAGE_LIMIT = 100
  * 刷新轮补关闭池时一页要多少张（#12）：与后端翻页上限同一个数（各后端自己再钳一次）。
  *
  * 为什么要有这个上限：关闭票在 Gitee 这类后端上可能成千上万张，刷新是每轮都跑的定时动作，
- * 不能把整仓关闭票都拉回来。一页就够把「最近关掉的、从没进过开放池的票」补进快照库，
- * 剩下一轮一轮往下补；每轮只发这一次请求，次数写进日志可数。
+ * 不能把整仓关闭票都拉回来。所以这里翻页取，但给页数封顶，触顶就如实标「这次没取全」，
+ * 留给下一轮继续补；绝不把只取到的一页当成全部（#7 评审 F7）。
  */
 const CLOSED_POOL_PAGE_LIMIT = 100
+/**
+ * 一轮刷新最多翻几页关闭池（#7 评审 F7）：5 页 × 每页 100 张 = 最多取 500 张关闭票。
+ *
+ * 上限怎么来的：不封顶时，一个有几千张关闭票的仓库每轮刷新都要把这些票全拉一遍，定时刷新
+ * 会被这一个动作拖长；封顶 500 张能覆盖绝大多数仓库的整份关闭历史，代价是每轮刷新最多多发
+ * 5 次 listPage 请求（今天是 1 次，触顶时多 4 次）。超过 500 张的仓库这一轮只能补进前 500 张，
+ * 所以触顶时必须把「不全」如实报出去：日志多记一格 closedPoolIncomplete，快照上的
+ * deck.partial 也置真，界面横幅照旧提示这份数据不全；下一轮刷新会重新从第一页补。
+ */
+const CLOSED_POOL_MAX_PAGES = 5
 /** 探索地图的标签（小写真源；listPage 的标签筛选按契约原样下推）。 */
 const MAP_LABEL = 'wayfinder:map'
 
@@ -106,9 +116,9 @@ export interface WorkingSetResult {
    * 这张数进常驻日志：事后要分得清「这张票为什么出现在已关闭里」是补回来的还是后端真回了它。
    */
   carriedClosedRows: number
-  /** 这一趟真的向远端发了几次关闭池查询（0 或 1；只有刷新轮才可能是 1）。 */
+  /** 这一趟真的向远端发了几次关闭池查询（0 到 CLOSED_POOL_MAX_PAGES；只有刷新轮才可能不是 0）。 */
   closedPoolQueries: number
-  /** 关闭池那一页回了多少张（失败时为 0）。 */
+  /** 关闭池这几页一共回了多少张（失败时为已取到的那几页之和）。 */
   closedPoolRows: number
   /** 关闭池那一页里真的补进并集的张数（已有、拉取请求、容器下的子票都不算）。 */
   closedPoolAdded: number
@@ -117,6 +127,11 @@ export interface WorkingSetResult {
    * 只记档名不记远端原文 —— 日志纪律要求这类行说清「哪一步、什么档」，不带正文。
    */
   closedPoolError: string
+  /**
+   * 这一趟有没有把关闭池取全（#7 评审 F7）：`true` 表示翻到上限还没翻完，或者中途某一页失败，
+   * 所以并集里的已关闭票只是「取到的那部分」。报数字的地方必须跟着标不全，不能当成全量。
+   */
+  closedPoolIncomplete: boolean
 }
 
 /** 这一行的票号：key 优先，number 兜底；两个都没有时回空串（组装层会把它当没有编号的行丢掉）。 */
@@ -420,27 +435,40 @@ export async function assembleWorkingSet(input: WorkingSetInput): Promise<Workin
   // #12：刷新轮再补一页「已关闭」票。上面那条补回规则只能补「上一份快照里见过」的票；
   //   一张建好就关、或本机从来没同步到过它的票，上一份快照里也没有，顶部的「已关闭 N」
   //   就会一直小于库里实际关闭票数。这一页是唯一的关闭票来源，所以只在刷新轮打开。
-  //   代价有界：每轮最多一次 listPage，回包条数受 CLOSED_POOL_PAGE_LIMIT 与后端页大小双重限制；
-  //   发起次数、回包条数、补入条数、失败档都交给 composeSnapshot 记进 snapshot.workingSet。
+  //   代价有界：每轮最多翻 CLOSED_POOL_MAX_PAGES 页（触顶即停，见那个常量的注释）；
+  //   发起次数、回包条数、补入条数、失败档、这一趟有没有取全都交给 composeSnapshot 记进 snapshot.workingSet。
+  //   只有真正取尽（某一页没有下一页游标）才算全；触顶或某一页失败都标不全，绝不把一页当成全部。
   let closedPoolQueries = 0
   let closedPoolRows = 0
   let closedPoolAdded = 0
   let closedPoolError = ''
+  let closedPoolIncomplete = false
   if (args.closedPool === true && tracker && typeof tracker.listPage === 'function') {
-    closedPoolQueries++
-    let page: any = null
-    try {
-      page = await tracker.listPage(ref, { state: 'closed' }, { limit: CLOSED_POOL_PAGE_LIMIT }, ctx)
-    } catch (e) {
-      page = null
-    }
-    if (page && page.ok === true) {
+    let cursor = ''
+    let exhausted = false
+    for (let i = 0; i < CLOSED_POOL_MAX_PAGES; i++) {
+      closedPoolQueries++
+      let page: any = null
+      try {
+        const opts: any = { limit: CLOSED_POOL_PAGE_LIMIT }
+        if (cursor) opts.cursor = cursor
+        page = await tracker.listPage(ref, { state: 'closed' }, opts, ctx)
+      } catch (e) {
+        page = null
+      }
+      if (!page || page.ok !== true) {
+        closedPoolError = closedPoolFailureKind(page)
+        break
+      }
       const items: any[] = page.data && Array.isArray(page.data.items) ? page.data.items : []
-      closedPoolRows = items.length
-      closedPoolAdded = appendClosedPoolRows(rows, seen, items)
-    } else {
-      closedPoolError = closedPoolFailureKind(page)
+      closedPoolRows += items.length
+      closedPoolAdded += appendClosedPoolRows(rows, seen, items)
+      const next = page.data && page.data.nextCursor
+      if (!next) { exhausted = true; break }
+      cursor = String(next)
     }
+    // 失败档已经能说明上一段没取完；这里只补一种它说不出来的：翻到页数上限还没翻完。
+    closedPoolIncomplete = !exhausted || closedPoolError !== ''
   }
 
   return {
@@ -457,5 +485,6 @@ export async function assembleWorkingSet(input: WorkingSetInput): Promise<Workin
     closedPoolRows,
     closedPoolAdded,
     closedPoolError,
+    closedPoolIncomplete,
   }
 }
