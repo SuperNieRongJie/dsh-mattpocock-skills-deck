@@ -100,6 +100,13 @@ export interface IssueRef {
   state?: State
   /** 边上带种类时给出（指向地图还是票）。 */
   type?: IssueType
+  /**
+   * 这条边本身是从哪儿读出来的：`native` 表示后端的结构字段里有这条边，`body` 表示是从某张票正文的
+   * 约定文字里解析出来的。省略表示这个后端不区分来源，读的人不要替它猜。
+   * 为什么来源要挂在边上：反向边（我挡住了谁）是从**别人**的正文里读出来的，
+   * 本票自己的来源标注说不到那些边。
+   */
+  source?: 'native' | 'body'
 }
 
 /**
@@ -214,6 +221,12 @@ export interface Issue {
   closedAt: string | null
   /** 父地图的 key；根票是 `null`（核心字段，永远存在）。 */
   parentKey: string | null
+  /**
+   * 父票这条关系是从哪里读出来的，只有「结构字段读不出、改用票正文兜底」的后端才填：
+   * `'structure'` 表示原生结构字段里有这条父子，`'body'` 表示是从票正文那一行约定文字读出来的（#8）。
+   * 省略表示这个后端不区分来源（例如 GitHub 只有结构字段），读的人不要替它猜。
+   */
+  parentSource?: 'structure' | 'body'
   author?: Actor
   /** 指派人（认领）；`[]` 表示明确「没人认领」，整个字段省略表示「认领状态未知」。 */
   assignees?: Actor[]
@@ -237,6 +250,12 @@ export interface Issue {
   reason?: ClosedReason
   /** 谁阻塞我（入边，唯一真源）。 */
   blockedBy?: IssueRef[]
+  /**
+   * `blockedBy` 这一列是从哪儿读出来的：`'body'` 表示这张票的阻塞关系写在正文末尾的
+   * `## Blocked by` 小节里（Gitee 只有这一种读法）。省略表示这个后端不区分来源，
+   * 或者这次根本没有阻塞关系 —— 不要读成「有阻塞但读不出来」（#7 评审 F2）。
+   */
+  blockedBySource?: 'body'
   /** 评论（决策记录）。 */
   comments?: Comment[]
   /** 评论总数（后端能给就给，拿不到就省略；调用方不许拿 comments.length 当总数）。 */

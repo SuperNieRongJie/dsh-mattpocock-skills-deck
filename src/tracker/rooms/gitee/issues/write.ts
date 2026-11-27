@@ -1,5 +1,7 @@
 /**
- * src/tracker/rooms/gitee/issues/write.ts —— 建票、关票、重开、改票与三类字段写入
+ * src/tracker/rooms/gitee/issues/write.ts —— 建票、关票、重开、改票与标签、认领人写入
+ *
+ * 挂父票与「结构字段没生效就写进正文」那一套不在这里，见 issues/parent-write.ts。
  *
  * 这一层只做三件事：把契约输入翻成 Gitee 的正文、发出去、把回包折回契约实体。
  * 判档一律交给 errors.ts（分类失败也走 fail(...)，不抛异常）。
@@ -21,18 +23,16 @@ import { GITEE_READ_TIMEOUT_MS, GITEE_SLOW_READ_TIMEOUT_MS } from '../../../../s
 import { failGitee } from '../errors.js'
 import { requestIssueCreate, requestIssueUpdate, requestMilestones } from '../requests.js'
 import { normalizeIssue } from '../model/normalize.js'
+import { parentAfterCreate, resolveParentId } from './parent-write.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoNameOf, repoRefId } from '../support/repo-ref.js'
 import { WAYFINDER_MAP_LABEL, toCanonical, toRemote } from '../support/label-alias.js'
 import { LIST_MAX_PAGES, PAGE_SIZE, asRows, isBag } from './shared.js'
+import { normalizePatchReply } from './patch-reply.js'
 import { fetchIssueRaw, getIssue } from './read.js'
 
 type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
 export type Repo = Partial<RepositoryRef> | null | undefined
-
-function textOf(res: { stdout?: string; stderr?: string }): string {
-  return String(res.stderr || '') || String(res.stdout || '')
-}
 
 function namesOf(labels: unknown): string[] {
   if (!Array.isArray(labels)) return []
@@ -84,28 +84,6 @@ function loginsOf(assignees: unknown): string[] {
   return out
 }
 
-/** 把父票号翻成 parent_id 要的数字 id；父票读不到就回 null（调用方决定怎么报）。 */
-async function resolveParentId(opCtx: GiteeCtx, refId: string, parentKey: string): Promise<number | null> {
-  const fetched = await fetchIssueRaw(opCtx, refId, parentKey)
-  if (!fetched.ok) return null
-  const id = fetched.bag['id']
-  return typeof id === 'number' && Number.isFinite(id) ? id : null
-}
-
-function normalizePatchReply(
-  res: { stdout?: string; stderr?: string; code?: number },
-  fallback: string,
-): { ok: true; issue: Issue } | { ok: false; result: OpResult<Issue> } {
-  if (res.code !== 0) {
-    return { ok: false, result: failGitee(res, textOf(res) || fallback, res) }
-  }
-  const parsed = parseJsonSafe(res.stdout)
-  if (!isBag(parsed)) {
-    return { ok: false, result: failGitee(res, 'write: 回包不是一个 JSON 对象', res) }
-  }
-  return { ok: true, issue: normalizeIssue(parsed) }
-}
-
 /**
  * 建票。
  *
@@ -153,11 +131,18 @@ export async function createIssue(
     // Gitee 的建票回包固定把 labels 写成空数组，哪怕标签已经写上了。直接把它交给
     // 调用方，面板会显示一张没有地目标签的票，看起来像又被静默丢弃了。这里补读一次
     // 单票，用远端的真实状态作回执；补读失败不影响建票结论，仍返回建票回包。
+    let created: Issue = reply.issue
     if (labels.length > 0) {
       const fresh = await fetchIssueRaw(effective, refId, reply.issue.key)
-      if (fresh.ok) return { ok: true, data: normalizeIssue(fresh.bag) }
+      if (fresh.ok) created = normalizeIssue(fresh.bag)
     }
-    return { ok: true, data: reply.issue }
+    if (input.parentKey) {
+      // 建票之后的父票处理（读回确认、正文兜底、parentError）整体在 parent-write.ts，
+      // 这里只把「票已经建成」与父票号交给它，本文件不重复实现那一套判定。
+      const parent = String(input.parentKey).trim()
+      return { ok: true, data: await parentAfterCreate(effective, refId, reply.issue.key, parent, created) }
+    }
+    return { ok: true, data: created }
   } catch (err) {
     return failGitee(err, 'create: gitee api 建票调用失败', err, effective)
   }
@@ -326,7 +311,8 @@ export async function setLabels(
  * 写认领人。
  *
  * Gitee 的认领人只有一个位置（assignee，字符串），所以：0 个 = 清空、1 个 = 直接写、
- * 2 个以上 = 如实回 unsupported。第三种不许挑一个写进去——那等于替用户悄悄丢了其余的人。
+ * 2 个以上 = 动手前如实回 unsupported 并说清「这张票只能挂一个负责人」。第三种不许挑一个写进去
+ * ——那等于替用户悄悄丢了其余的人；也不许拿「协助者」字段冒充第二负责人，那是另一种语义。
  */
 export async function setAssignees(
   ctx: GiteeCtx,
@@ -344,10 +330,13 @@ export async function setAssignees(
   if (!wantedKey) return fail(ERROR_KIND.PARSE, 'setAssignees: key required', '', TRACKER_ERROR_STAGE.INPUT_REFUSED)
   const logins = loginsOf(assignees)
   if (logins.length > 1) {
-    return failGitee(
-      'assignee single-valued',
-      'setAssignees: Gitee 的一张票只有一个认领人位置，给 ' + String(logins.length) + ' 个人没法如实写进去（没有偷偷只写第一个）',
+    // 多人是契约允许的输入，Gitee 却只有一个负责人位置：这里动手前就拒绝，
+    // 所以标 input-refused —— deck 的回执据此告诉人「改输入才能重试」，而不是「怀疑写了一半」。
+    return fail(
+      ERROR_KIND.UNSUPPORTED,
+      'setAssignees: 这张票只能挂一个负责人（Gitee 的一张票只有一个负责人位置，「协助者」是另一种语义，不能拿来顶第二负责人）。这次给了 ' + String(logins.length) + ' 个人（' + logins.join('、') + '）：没有写进远端，也没有偷偷只写第一个。',
       JSON.stringify(logins),
+      TRACKER_ERROR_STAGE.INPUT_REFUSED,
     )
   }
   try {
@@ -366,57 +355,6 @@ export async function setAssignees(
   }
 }
 
-/**
- * 挂父票 / 拆父票。
- *
- * 挂：先把父票号读回来拿数字 id，再 PATCH parent_id。
- * 拆（parentKey === null）：Gitee 没有「移到根」的写法，如实回 unsupported。
- * 这一条是「形态不合」，不是「没做」：发一个含义不明的 0 有可能把票挂到不存在的父票上。
- */
-export async function setParent(
-  ctx: GiteeCtx,
-  repo: Repo,
-  key: string,
-  parentKey: string | null,
-  opts: SetOpts | undefined,
-  opCtx?: GiteeCtx,
-): Promise<OpResult<Issue>> {
-  void opts
-  const effective = opCtx || ctx
-  const refId = repoRefId(repo)
-  if (!refId) return failGitee('repo.refId missing', 'setParent: repo.refId missing', '')
-  const wantedKey = String(key == null ? '' : key).trim()
-  if (!wantedKey) return fail(ERROR_KIND.PARSE, 'setParent: key required', '', TRACKER_ERROR_STAGE.INPUT_REFUSED)
-  const parent = parentKey == null ? '' : String(parentKey).trim()
-  if (!parent) {
-    return failGitee(
-      'parent clear unsupported',
-      'setParent: Gitee 的改票正文没有把票移回根上的写法（parent_id 只收父票数字 id，没有 0 或空串的约定），拆父票做不到',
-      '',
-    )
-  }
-  try {
-    const parentId = await resolveParentId(effective, refId, parent)
-    if (parentId === null) {
-      return failGitee('parent not found', 'setParent: 父票 ' + parent + ' 没找到（或没有权限看它）', parent)
-    }
-    const res = await requestIssueUpdate(
-      effective,
-      refId,
-      wantedKey,
-      { repo: repoNameOf(refId), parent_id: parentId },
-      GITEE_READ_TIMEOUT_MS,
-    )
-    const reply = normalizePatchReply(res, 'setParent: gitee api 挂父票失败')
-    if (!reply.ok) return reply.result
-    // 回包里的 parent_url 才是远端的真相；parent_id 只是数字，不能当 parentKey 用。
-    if (!reply.issue.parentKey) reply.issue.parentKey = parent
-    return { ok: true, data: reply.issue }
-  } catch (err) {
-    return failGitee(err, 'setParent: gitee api 挂父票调用失败', err, effective)
-  }
-}
-
 export default {
   createIssue,
   closeIssue,
@@ -424,5 +362,4 @@ export default {
   updateIssue,
   setLabels,
   setAssignees,
-  setParent,
 }

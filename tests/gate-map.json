@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-26T06:05:17.423Z",
+  "generatedAt": "2026-11-27T02:54:04.658Z",
   "generatedBy": "node scripts/gate-map.mts",
-  "chainLength": 604,
-  "gateCount": 604,
-  "attributedGates": 548,
+  "chainLength": 609,
+  "gateCount": 609,
+  "attributedGates": 553,
   "unattributedGates": 56,
   "buildOutputOnlyGates": 21,
-  "completionRecordedGates": 145,
+  "completionRecordedGates": 147,
   "smokeLength": 8,
   "smokeCompletionRecordedGates": 5,
-  "graphFileCount": 992,
+  "graphFileCount": 998,
   "gates": [
     {
       "step": "node tests/verify-1207-splice-ts.ts",
@@ -963,6 +963,35 @@
       "reason": "归属来自 文件头 // 门禁归属: 注释（共 3 条）"
     },
     {
+      "step": "node tests/verify-10-gitee-single-assignee.ts",
+      "file": "tests/verify-10-gitee-single-assignee.ts",
+      "guards": [
+        "src/deck/tools/issue-patch.ts",
+        "src/refresh/kernel/host-budget.ts",
+        "src/refresh/kernel/tool-call-budget.ts",
+        "src/refresh/rooms/host/quota-ledger.ts",
+        "src/refresh/rooms/host/refresh-gate.ts",
+        "src/tracker/registry/core.ts",
+        "src/tracker/rooms/gitee/index.ts",
+        "src/tracker/rooms/gitee/support/capability-register.ts",
+        "tests/lib/deck-decide-stub.ts"
+      ],
+      "dirs": [
+        "src/deck/tools",
+        "src/refresh/kernel",
+        "src/refresh/rooms/host",
+        "src/tracker/registry",
+        "src/tracker/rooms/gitee",
+        "src/tracker/rooms/gitee/support",
+        "tests/lib"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": false,
+      "expectedAssertions": 0,
+      "reason": "归属来自：载入模块（require / import / pathToFileURL） 1 条；源码里的路径字面量 8 条"
+    },
+    {
       "step": "node tests/verify-1003-layout-in-file.ts",
       "file": "tests/verify-1003-layout-in-file.ts",
       "guards": [
@@ -1392,6 +1421,39 @@
       "completionRecord": false,
       "expectedAssertions": 0,
       "reason": "归属来自：载入模块（require / import / pathToFileURL） 1 条；源码里的路径字面量 13 条"
+    },
+    {
+      "step": "node tests/verify-11-gitee-blockedby-body.ts",
+      "file": "tests/verify-11-gitee-blockedby-body.ts",
+      "guards": [
+        "src/deck/rules/edge-landing.ts",
+        "src/deck/tools/issue-get.ts",
+        "src/deck/tools/map-snapshot.ts",
+        "src/refresh/kernel/host-budget.ts",
+        "src/refresh/kernel/tool-call-budget.ts",
+        "src/refresh/rooms/host/quota-ledger.ts",
+        "src/refresh/rooms/host/refresh-gate.ts",
+        "src/tracker/registry/core.ts",
+        "src/tracker/rooms/gitee/index.ts",
+        "src/tracker/rooms/gitee/model/blocked-by-section.ts",
+        "src/tracker/rooms/gitee/model/normalize.ts",
+        "tests/lib/deck-decide-stub.ts"
+      ],
+      "dirs": [
+        "src/deck/rules",
+        "src/deck/tools",
+        "src/refresh/kernel",
+        "src/refresh/rooms/host",
+        "src/tracker/registry",
+        "src/tracker/rooms/gitee",
+        "src/tracker/rooms/gitee/model",
+        "tests/lib"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": false,
+      "expectedAssertions": 0,
+      "reason": "归属来自：载入模块（require / import / pathToFileURL） 1 条；源码里的路径字面量 11 条"
     },
     {
       "step": "node tests/verify-1106-deck-surface.ts",
@@ -1904,6 +1966,24 @@
       "completionRecord": false,
       "expectedAssertions": 0,
       "reason": "归属来自：载入模块（require / import / pathToFileURL） 5 条"
+    },
+    {
+      "step": "node tests/verify-12-closed-pool.ts",
+      "file": "tests/verify-12-closed-pool.ts",
+      "guards": [
+        "src/host/tracker/snapshot.ts",
+        "src/host/tracker/snapshotWorkingSet.ts",
+        "src/refresh/rooms/host/session-refresh-schedule.ts"
+      ],
+      "dirs": [
+        "src/host/tracker",
+        "src/refresh/rooms/host"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": true,
+      "expectedAssertions": 41,
+      "reason": "归属来自 文件头 // 门禁归属: 注释（共 3 条）"
     },
     {
       "step": "node tests/verify-1206-glossary-naming.ts",
@@ -8741,6 +8821,40 @@
       "reason": "归属来自：载入模块（require / import / pathToFileURL） 2 条；源码里的路径字面量 10 条"
     },
     {
+      "step": "node tests/verify-8-gitee-parent-body.ts",
+      "file": "tests/verify-8-gitee-parent-body.ts",
+      "guards": [
+        "src/deck/rules/edge-landing.ts",
+        "src/deck/tools/issue-create.ts",
+        "src/deck/tools/issue-get.ts",
+        "src/refresh/kernel/host-budget.ts",
+        "src/refresh/kernel/tool-call-budget.ts",
+        "src/refresh/rooms/host/quota-ledger.ts",
+        "src/refresh/rooms/host/refresh-gate.ts",
+        "src/shared/issue-file/src/marker.ts",
+        "src/tracker/registry/core.ts",
+        "src/tracker/rooms/gitee/index.ts",
+        "src/tracker/rooms/gitee/model/parent-line.ts",
+        "tests/lib/deck-decide-stub.ts"
+      ],
+      "dirs": [
+        "src/deck/rules",
+        "src/deck/tools",
+        "src/refresh/kernel",
+        "src/refresh/rooms/host",
+        "src/shared/issue-file/src",
+        "src/tracker/registry",
+        "src/tracker/rooms/gitee",
+        "src/tracker/rooms/gitee/model",
+        "tests/lib"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": false,
+      "expectedAssertions": 0,
+      "reason": "归属来自：载入模块（require / import / pathToFileURL） 1 条；源码里的路径字面量 11 条"
+    },
+    {
       "step": "node tests/verify-818-version-control-view.ts",
       "file": "tests/verify-818-version-control-view.ts",
       "guards": [
@@ -9267,6 +9381,22 @@
       "completionRecord": false,
       "expectedAssertions": 0,
       "reason": "归属来自：载入模块（require / import / pathToFileURL） 2 条；源码里的路径字面量 5 条"
+    },
+    {
+      "step": "node tests/verify-9-panel-closed-pool.ts",
+      "file": "tests/verify-9-panel-closed-pool.ts",
+      "guards": [
+        "src/host/tracker/snapshot.ts",
+        "src/host/tracker/snapshotWorkingSet.ts"
+      ],
+      "dirs": [
+        "src/host/tracker"
+      ],
+      "unattributed": false,
+      "buildOutputOnly": false,
+      "completionRecord": true,
+      "expectedAssertions": 31,
+      "reason": "归属来自 文件头 // 门禁归属: 注释（共 2 条）"
     },
     {
       "step": "node tests/verify-907-chain-titles.ts",
@@ -15093,11 +15223,13 @@
     "src/deck/rules": [
       "node tests/verify-dependency-rules.ts",
       "node tests/verify-1039-rules-pure.ts",
+      "node tests/verify-11-gitee-blockedby-body.ts",
       "node tests/verify-1277-md-spec-container.ts",
       "node tests/verify-1403-kind-two-layer.ts",
       "node tests/verify-1413-map-plan-two-layer.ts",
       "node tests/verify-1507-create-strict.ts",
       "node tests/verify-1832-single-triage-state.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-suggest-next-steps.ts",
       "node tests/verify-time-config.ts"
     ],
@@ -15147,11 +15279,13 @@
       "node tests/verify-deck-tools-matrix.ts",
       "node tests/verify-deck-tools.ts",
       "node tests/verify-dependency-rules.ts",
+      "node tests/verify-10-gitee-single-assignee.ts",
       "node tests/verify-1003-single-outlet.ts",
       "node tests/verify-1003-unified-decision.ts",
       "node tests/verify-1090-progress-roundtrip.ts",
       "node tests/verify-1091-original-words.ts",
       "node tests/verify-1092-original-words-roundtrip.ts",
+      "node tests/verify-11-gitee-blockedby-body.ts",
       "node tests/verify-1106-deck-surface.ts",
       "node tests/verify-1150-plan-store-durable.ts",
       "node tests/verify-1195-budget-start.ts",
@@ -15184,6 +15318,7 @@
       "node tests/verify-723-gate-wiring.ts",
       "node tests/verify-784-effortId.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-895-bulk-deadline.ts",
       "node tests/verify-898-block-merge.ts",
@@ -15350,6 +15485,7 @@
       "node tests/verify-platform-contract.ts"
     ],
     "src/host/tracker": [
+      "node tests/verify-12-closed-pool.ts",
       "node tests/verify-1277-md-spec-container.ts",
       "node tests/verify-1286-snapshot.ts",
       "node tests/verify-1291-closed-map-open-children.ts",
@@ -15367,6 +15503,7 @@
       "node tests/verify-344-chain-auto-refresh.ts",
       "node tests/verify-507-pr-offline.ts",
       "node tests/verify-691-map-subissues.ts",
+      "node tests/verify-9-panel-closed-pool.ts",
       "node tests/verify-907-chain-titles.ts",
       "node tests/verify-934-935-invariants.ts",
       "node tests/verify-dirwritable.ts",
@@ -15402,12 +15539,14 @@
       "node tests/verify-deck-tools.ts",
       "node tests/verify-dependency-rules.ts",
       "node tests/verify-gate-map.ts",
+      "node tests/verify-10-gitee-single-assignee.ts",
       "node tests/verify-1003-single-outlet.ts",
       "node tests/verify-1003-unified-decision.ts",
       "node tests/verify-1083-work-path-persist.ts",
       "node tests/verify-1090-progress-roundtrip.ts",
       "node tests/verify-1091-original-words.ts",
       "node tests/verify-1092-original-words-roundtrip.ts",
+      "node tests/verify-11-gitee-blockedby-body.ts",
       "node tests/verify-1106-deck-surface.ts",
       "node tests/verify-1150-plan-store-durable.ts",
       "node tests/verify-1195-budget-start.ts",
@@ -15436,6 +15575,7 @@
       "node tests/verify-723-gate-wiring.ts",
       "node tests/verify-784-effortId.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-895-bulk-deadline.ts",
       "node tests/verify-898-block-merge.ts",
@@ -15529,6 +15669,7 @@
       "node tests/verify-deck-tools-matrix.ts",
       "node tests/verify-deck-tools.ts",
       "node tests/verify-1-refresh-reply-version.ts",
+      "node tests/verify-10-gitee-single-assignee.ts",
       "node tests/verify-1003-no-cwd-masquerade.ts",
       "node tests/verify-1003-single-outlet.ts",
       "node tests/verify-1003-unified-decision.ts",
@@ -15539,12 +15680,14 @@
       "node tests/verify-1090-progress-roundtrip.ts",
       "node tests/verify-1091-original-words.ts",
       "node tests/verify-1092-original-words-roundtrip.ts",
+      "node tests/verify-11-gitee-blockedby-body.ts",
       "node tests/verify-1109-matches-timeout.ts",
       "node tests/verify-1115-timer-handle.ts",
       "node tests/verify-1150-plan-store-durable.ts",
       "node tests/verify-1187-gitlab-chain-predicates.ts",
       "node tests/verify-1195-budget-start.ts",
       "node tests/verify-1195-timeout-split.ts",
+      "node tests/verify-12-closed-pool.ts",
       "node tests/verify-1242-panel-numbers.ts",
       "node tests/verify-1291-closed-map-open-children.ts",
       "node tests/verify-1304-deps-native.ts",
@@ -15641,6 +15784,7 @@
       "node tests/verify-729-force-dedup.ts",
       "node tests/verify-784-effortId.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-839-credential-exec.ts",
       "node tests/verify-847-stall-watch.ts",
@@ -15740,7 +15884,8 @@
       "node tests/verify-1091-original-words.ts",
       "node tests/verify-1092-original-words-roundtrip.ts",
       "node tests/verify-1277-md-spec-container.ts",
-      "node tests/verify-1489-progress.ts"
+      "node tests/verify-1489-progress.ts",
+      "node tests/verify-8-gitee-parent-body.ts"
     ],
     "src/shared/label-color": [],
     "src/shared/label-color/src": [
@@ -15979,10 +16124,12 @@
       "node tests/verify-deck-tools-matrix.ts",
       "node tests/verify-deck-tools.ts",
       "node tests/verify-dependency-rules.ts",
+      "node tests/verify-10-gitee-single-assignee.ts",
       "node tests/verify-1003-unified-decision.ts",
       "node tests/verify-1090-progress-roundtrip.ts",
       "node tests/verify-1091-original-words.ts",
       "node tests/verify-1092-original-words-roundtrip.ts",
+      "node tests/verify-11-gitee-blockedby-body.ts",
       "node tests/verify-1144-markdown-issue-address.ts",
       "node tests/verify-1150-plan-store-durable.ts",
       "node tests/verify-1442-tracker-tools.ts",
@@ -15998,6 +16145,7 @@
       "node tests/verify-723-gate-wiring.ts",
       "node tests/verify-784-effortId.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-895-github-memo.ts",
       "node tests/verify-929-batch-cycle.ts",
@@ -16023,9 +16171,19 @@
       "node tests/verify-prompts.ts"
     ],
     "src/tracker/rooms/gitee": [
+      "node tests/verify-10-gitee-single-assignee.ts",
+      "node tests/verify-11-gitee-blockedby-body.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-gh-gateway.ts",
       "node tests/verify-gitee-client-login-detect.ts",
       "node tests/verify-gitee-room-shape.ts"
+    ],
+    "src/tracker/rooms/gitee/model": [
+      "node tests/verify-11-gitee-blockedby-body.ts",
+      "node tests/verify-8-gitee-parent-body.ts"
+    ],
+    "src/tracker/rooms/gitee/support": [
+      "node tests/verify-10-gitee-single-assignee.ts"
     ],
     "src/tracker/rooms/github": [
       "node tests/verify-no-mixed-session.ts",
@@ -16468,9 +16626,11 @@
       "node tests/verify-deck-tools.ts",
       "node tests/verify-gate-map.ts",
       "node tests/verify-no-title.ts",
+      "node tests/verify-10-gitee-single-assignee.ts",
       "node tests/verify-1090-progress-roundtrip.ts",
       "node tests/verify-1091-original-words.ts",
       "node tests/verify-1092-original-words-roundtrip.ts",
+      "node tests/verify-11-gitee-blockedby-body.ts",
       "node tests/verify-1109-matches-timeout.ts",
       "node tests/verify-1115-timer-handle.ts",
       "node tests/verify-1146-virtual-clock-liveness.ts",
@@ -16561,6 +16721,7 @@
       "node tests/verify-784-effortId.ts",
       "node tests/verify-786-focus-end.ts",
       "node tests/verify-790-parent-edge.ts",
+      "node tests/verify-8-gitee-parent-body.ts",
       "node tests/verify-818-version-control-view.ts",
       "node tests/verify-829-parent-reread.ts",
       "node tests/verify-841-write-phones.ts",
@@ -16665,12 +16826,12 @@
   },
   "coverage": {
     "sourceRoot": "src",
-    "fileCount": 1015,
+    "fileCount": 1021,
     "dirCount": 110,
-    "coveredFileCount": 1015,
+    "coveredFileCount": 1021,
     "ungatedFileCount": 0,
     "ungatedDirCount": 0,
-    "dedicatedDirCount": 81,
+    "dedicatedDirCount": 83,
     "guardedFiles": [
       "src/client/floating/Pop.ts",
       "src/client/floating/SkillFloatList.ts",
@@ -17452,16 +17613,22 @@
       "src/tracker/rooms/gitee/comments/write.ts",
       "src/tracker/rooms/gitee/errors.ts",
       "src/tracker/rooms/gitee/index.ts",
+      "src/tracker/rooms/gitee/issues/blocked-by.ts",
       "src/tracker/rooms/gitee/issues/counts.ts",
+      "src/tracker/rooms/gitee/issues/dependencies.ts",
       "src/tracker/rooms/gitee/issues/maps.ts",
       "src/tracker/rooms/gitee/issues/pages.ts",
+      "src/tracker/rooms/gitee/issues/parent-write.ts",
+      "src/tracker/rooms/gitee/issues/patch-reply.ts",
       "src/tracker/rooms/gitee/issues/read.ts",
       "src/tracker/rooms/gitee/issues/shared.ts",
       "src/tracker/rooms/gitee/issues/sub-issues.ts",
       "src/tracker/rooms/gitee/issues/write.ts",
       "src/tracker/rooms/gitee/labels/colors.ts",
       "src/tracker/rooms/gitee/labels/list.ts",
+      "src/tracker/rooms/gitee/model/blocked-by-section.ts",
       "src/tracker/rooms/gitee/model/normalize.ts",
+      "src/tracker/rooms/gitee/model/parent-line.ts",
       "src/tracker/rooms/gitee/model/repo-identity.ts",
       "src/tracker/rooms/gitee/preflight.ts",
       "src/tracker/rooms/gitee/project/init-project.ts",
@@ -17856,6 +18023,8 @@
       "src/tracker/registry",
       "src/tracker/rooms",
       "src/tracker/rooms/gitee",
+      "src/tracker/rooms/gitee/model",
+      "src/tracker/rooms/gitee/support",
       "src/tracker/rooms/github",
       "src/tracker/rooms/github/channels/graphql",
       "src/tracker/rooms/github/channels/rest",
@@ -17950,14 +18119,10 @@
       },
       {
         "path": "src/tracker/rooms/gitee/issues",
-        "fileCount": 7
+        "fileCount": 11
       },
       {
         "path": "src/tracker/rooms/gitee/labels",
-        "fileCount": 2
-      },
-      {
-        "path": "src/tracker/rooms/gitee/model",
         "fileCount": 2
       },
       {
@@ -17971,10 +18136,6 @@
       {
         "path": "src/tracker/rooms/gitee/room",
         "fileCount": 3
-      },
-      {
-        "path": "src/tracker/rooms/gitee/support",
-        "fileCount": 5
       },
       {
         "path": "src/tracker/rooms/github/channels",

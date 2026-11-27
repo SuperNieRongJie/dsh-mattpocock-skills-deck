@@ -101,6 +101,13 @@ const ALLOWED = {
   'gh.resolve.fail': ['hasDSH_GH_PATH', 'errorHash'],
   'graphql.fallback': ['scope', 'reason'],
   'issues.fallback': ['from', 'to', 'reason'],
+  // 2026-11-27（#7）新增按需 #156～#158 三条「正文兜底」整趟轨迹：Gitee 的父子与阻塞关系在结构字段
+  //   读不出来时只能从票正文认，写侧还要写完正文再读回才敢说关系落地。三条各管一趟——挂父票、
+  //   改阻塞关系、读侧认定；只记枚举、计数与耗时，票面正文、标题与远端原文一个字都不记。
+  //   落点是 src/tracker/rooms/gitee/support/read-log.ts 的三个助手，调用点见各行说明。
+  'gitee.parent.fallback': ['op', 'key', 'parent', 'replyOk', 'readBack', 'fallback', 'outcome', 'latencyMs', 'opId'],
+  'gitee.blockedBy.fallback': ['key', 'wanted', 'blockersRead', 'loopNodes', 'replyCode', 'readBack', 'missing', 'extra', 'outcome', 'latencyMs', 'opId'],
+  'gitee.bodyFallback.read': ['op', 'key', 'structural', 'parentSource', 'blockedByCount', 'singleReads', 'complete', 'latencyMs', 'opId'],
   // 2026-10-20（#1295）常驻 #10 `snapshot.built` 增补一格 `specs`：这一份快照里判成规格（实施地图）的容器有几个。
   //   为什么要有：`maps` 是容器总数（探索地图与规格都住在 maps 数组里，数组名是历史名），只有总数时分不清
   //   「这一份里根本没有规格」与「有规格却没认出来」；`specs` 与 `maps` 配对读：specs=0 且 maps>0 说明
@@ -113,7 +120,15 @@ const ALLOWED = {
   // 2026-11-01（#1796）新增常驻 #149 `snapshot.workingSet`：首屏工作集这一趟的事实。为什么要有：子票是按容器
   //   逐张发的，失败只跳过不抛；不记的话，事后分不清「这张地图下面怎么少了几张」是没拉、拉到一半还是后端
   //   不提供。失败清单只写「票号:错误档」，不记远端原文与正文。落点：src/host/tracker/snapshot.ts 的 composeSnapshot。
-  'snapshot.workingSet': ['openContainers', 'subIssues', 'subIssuesFailed', 'subIssuesIncomplete', 'closedMapRows', 'closedMapSource', 'failed', 'latencyMs'],
+  // 2026-11-27（#9）`snapshot.workingSet` 增补一格 `carriedClosedRows`：这一趟补回来的已关闭票张数
+  //   （上一份快照里有、这一趟开放池里没有的顶票）。为什么要有：「这张票怎么出现在已关闭里」的两种可能
+  //   （后端真的回了它 / 本仓按上一份快照补的）只看别的格分不出来；为 0 时说明补行逻辑这一次一张都没补。
+  // 2026-11-27（#12）`snapshot.workingSet` 再增补四格 `closedPoolQueries` / `closedPoolRows` / `closedPoolAdded` /
+  //   `closedPoolError`，2026-11-27 同一轮再增补 `closedPoolIncomplete`：刷新那一轮多出来的关闭池查询，界面上看不见
+  //   但每轮都要付。发起次数（0 到 5，最多翻 5 页）、回包条数、真补进并集几条、失败档（空串表示没失败）、
+  //   这一轮有没有取全（true 表示翻到页数上限还有下一页，或某一页失败）缺一格就问不出「顶部那个数字为什么涨了 /
+  //   这一轮为什么没涨 / 这个数字本身全不全」。只记计数与枚举，不记票面内容；首屏恒为 0 / 0 / 0 / 空串 / false。
+  'snapshot.workingSet': ['openContainers', 'subIssues', 'subIssuesFailed', 'subIssuesIncomplete', 'closedMapRows', 'closedMapSource', 'carriedClosedRows', 'failed', 'latencyMs', 'closedPoolQueries', 'closedPoolRows', 'closedPoolAdded', 'closedPoolError', 'closedPoolIncomplete'],
   // 2026-11-04（#1869）新增常驻 #150～#153 四族 `workspaceSnapshot.*`：面板 issue 数据的权威副本换成
   //   本地 SQLite 快照库之后，「只看日志就能说出走到哪一步」全靠这四族。字段一律只记枚举、计数、耗时
   //   与短散列（工作区根与仓库身份都是 hash，不记路径原文）；`detail` 只放一句话的失败说明。

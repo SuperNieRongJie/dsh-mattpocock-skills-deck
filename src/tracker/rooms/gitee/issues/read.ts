@@ -20,10 +20,10 @@ import { GITEE_READ_TIMEOUT_MS } from '../../../../shared/time-config/src/values
 import { failGitee } from '../errors.js'
 import { fail } from '../../../kernel/preflight.js'
 import { requestCommentList, requestIssueGet, requestIssueList } from '../requests.js'
-import { normalizeIssue } from '../model/normalize.js'
+import { normalizeIssue, structuralParentFieldOf } from '../model/normalize.js'
 import { parseJsonSafe } from '../support/json.js'
 import { repoRefId } from '../support/repo-ref.js'
-import { emitReadDegraded } from '../support/read-log.js'
+import { emitBodyFallbackRead, emitReadDegraded } from '../support/read-log.js'
 import { LIST_MAX_PAGES, PAGE_SIZE, asRows, buildListQuery, isBag, labelsOf, remoteStatesOf } from './shared.js'
 
 type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
@@ -183,6 +183,19 @@ export async function getIssue(
       if (collected) issue.comments = collected
     }
     issue.commentCount = total > 0 ? total : issue.comments ? issue.comments.length : 0
+    // 读侧这一趟的整趟轨迹：结构字段给了什么、父票最终按哪一侧认的、正文里认了几条阻塞。
+    // 只在这一条成功路径上记：失败的样子本来就有 read.degraded 那几行说明，不必重复。
+    emitBodyFallbackRead(
+      logCtx,
+      'get',
+      wantedKey,
+      structuralParentFieldOf(fetched.bag),
+      issue.parentSource || 'none',
+      (issue.blockedBy || []).length,
+      0,
+      true,
+      startedAt,
+    )
     return { ok: true, data: issue }
   } catch (err) {
     emitReadDegraded(logCtx, 'get', 'get:transport', Date.now() - startedAt)

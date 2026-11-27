@@ -177,6 +177,13 @@ interface ComposeOpts {
    * 宿主用它把整池写进快照库。回调同步返回、自己吞错，不许挡快照回包。
    */
   onRows?: (rows: Issue[]) => void
+  /**
+   * #12：刷新轮打开，让工作集多补一页已关闭票（从没进过开放池的那些）。
+   *
+   * 首屏一律不传：首屏取数次数被票 #9 的验收锁死，多这一页就是多一次远端调用；
+   * 只有刷新这条定时动作值得付这一次查询的代价，次数写进 snapshot.workingSet 日志。
+   */
+  closedPool?: boolean
 }
 
 // 创建宿主编排器。
@@ -319,6 +326,12 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
         openContainers: prelim.maps,
         // #1774：上一份快照优先用调用方传入的那份（生产电话路的房间缓存），没有才用本编排器缓存。
         previousMaps: (prevSnapshot && Array.isArray(prevSnapshot.maps)) ? prevSnapshot.maps : [],
+        // #9：上一份快照整份递下去，用来把「远端已关、这一趟开放池里没有」的票补成已关闭行。
+        previousSnapshot: prevSnapshot,
+        // #9：开放池这份来源完整（没截断、没掉到 REST）才许把缺行判成关闭；缺行也可能只是没取到。
+        openListComplete: !listFallback && !listTruncated,
+        // #12：只有刷新轮才补一页已关闭票（首屏不传，取数次数不变）。
+        closedPool: o.closedPool === true,
       })
       // #1796：工作集这一趟的事实进常驻日志（附录 #149）。为什么单记一条：子票拉取是按容器逐张发的，
       //   失败只跳过不抛，若不记，事后分不清「这张地图下面怎么少了几张」是没拉、拉到一半还是后端不提供。
@@ -332,6 +345,17 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
             subIssuesIncomplete: workingSet.subIssuesIncomplete,
             closedMapRows: workingSet.closedMapRows,
             closedMapSource: workingSet.closedMapSource,
+            // #9：这一趟补回来的已关闭票张数（上一份快照里有、开放池里没有的顶票）。
+            carriedClosedRows: workingSet.carriedClosedRows,
+            // #12：刷新轮多出来的关闭池查询次数与结果（首屏恒为 0 / 0 / 0 / 空串）。
+            //   为什么必须记：这一次查询在界面上看不见，但每轮刷新都要付；记下次数、条数与失败档，
+            //   事后才能回答「这个数字为什么涨了」「这一轮为什么没涨」。
+            closedPoolQueries: workingSet.closedPoolQueries,
+            closedPoolRows: workingSet.closedPoolRows,
+            closedPoolAdded: workingSet.closedPoolAdded,
+            closedPoolError: workingSet.closedPoolError,
+            // #7 评审 F7：翻到页数上限还没翻完、或某一页失败时置真 —— 这一份已关闭票只是取到的那部分。
+            closedPoolIncomplete: workingSet.closedPoolIncomplete,
             failed: workingSet.failed,
             latencyMs: Date.now() - workingSetStartedMs,
           })
@@ -354,9 +378,11 @@ export function createSnapshotComposer(registry: SnapshotComposerRegistry, opts:
       // #1887：数字不再向后端要，也不再有「待校准」——六个数字由快照库一次查询算出，
       //   由电话层在库写到最新之后挂到 deck.counts 上（本编排器只负责取数、写库与组装）。
       //   partial 仍只报「这份行数据有没有异常缺失」：列表触上限、REST 降级、开放容器的子票
-      //   没拉全或拉不到。计数不再参与 partial —— 数字已经从库来，不再需要拿后端 open 对账。
+      //   没拉全或拉不到、刷新轮关闭池没翻完（取到页数上限或某一页失败）。计数不再参与 partial
+      //   —— 数字已经从库来，不再需要拿后端 open 对账。
       deck.partial = listTruncated || listFallback === 'rest'
         || Number(workingSet.subIssuesFailed || 0) > 0 || Number(workingSet.subIssuesIncomplete || 0) > 0
+        || workingSet.closedPoolIncomplete === true
       snapshot.deck = deck
       // #715（诚实显示）：降级标记与「推迟 / 暂停 / 这个窗口没在刷新」这四项读数，只在这里写。
       //   降级标记（'rest'）是上面那一趟 list 真实掉到 REST 通道才带回来的事实 —— 界面层永远不许写它
