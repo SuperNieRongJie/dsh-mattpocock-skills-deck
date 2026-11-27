@@ -212,10 +212,6 @@ function sectionOf(body: unknown, want: unknown): { found: boolean; name: string
 }
 
 /**
- * 装配层调一次，拿到这对 { definition, run }。deps 是宿主注入的依赖袋（见 DeckIssueGetDeps），
- * 什么都不给也能跑：壳与这里的每一处都各自退默认。
- */
-/**
  * 落点注记：来源已知时说清这条关系写在哪儿，来源全都不明时才说「只知道契约字段」。
  *
  * 三种关系各自独立判断：父子、被阻塞、阻塞别人各有自己的来源标注，谁有就说谁，
@@ -231,6 +227,10 @@ function caveatOf(sources: { parent: string; blockedBy: boolean; reverse: boolea
   return parts.join('；') + '。这个后端读不出原生结构字段，所以这些关系的落点是「正文行」而不是原生层级或原生字段。'
 }
 
+/**
+ * 装配层调一次，拿到这对 { definition, run }。deps 是宿主注入的依赖袋（见 DeckIssueGetDeps），
+ * 什么都不给也能跑：壳与这里的每一处都各自退默认。
+ */
 export function createDeckIssueGet(deps?: DeckIssueGetDeps) {
   const d: DeckIssueGetDeps = deps || {}
   const shell = createDeckShell(Object.assign({}, d, {
