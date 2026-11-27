@@ -101,6 +101,13 @@ const ALLOWED = {
   'gh.resolve.fail': ['hasDSH_GH_PATH', 'errorHash'],
   'graphql.fallback': ['scope', 'reason'],
   'issues.fallback': ['from', 'to', 'reason'],
+  // 2026-11-27（#7）新增按需 #156～#158 三条「正文兜底」整趟轨迹：Gitee 的父子与阻塞关系在结构字段
+  //   读不出来时只能从票正文认，写侧还要写完正文再读回才敢说关系落地。三条各管一趟——挂父票、
+  //   改阻塞关系、读侧认定；只记枚举、计数与耗时，票面正文、标题与远端原文一个字都不记。
+  //   落点是 src/tracker/rooms/gitee/support/read-log.ts 的三个助手，调用点见各行说明。
+  'gitee.parent.fallback': ['op', 'key', 'parent', 'replyOk', 'readBack', 'fallback', 'outcome', 'latencyMs', 'opId'],
+  'gitee.blockedBy.fallback': ['key', 'wanted', 'blockersRead', 'loopNodes', 'replyCode', 'readBack', 'missing', 'extra', 'outcome', 'latencyMs', 'opId'],
+  'gitee.bodyFallback.read': ['op', 'key', 'structural', 'parentSource', 'blockedByCount', 'singleReads', 'complete', 'latencyMs', 'opId'],
   // 2026-10-20（#1295）常驻 #10 `snapshot.built` 增补一格 `specs`：这一份快照里判成规格（实施地图）的容器有几个。
   //   为什么要有：`maps` 是容器总数（探索地图与规格都住在 maps 数组里，数组名是历史名），只有总数时分不清
   //   「这一份里根本没有规格」与「有规格却没认出来」；`specs` 与 `maps` 配对读：specs=0 且 maps>0 说明

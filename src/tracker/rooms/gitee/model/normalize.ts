@@ -178,6 +178,21 @@ function keyFromParentUrl(raw: unknown): string | null {
 }
 
 /**
+ * 结构字段这一侧有没有给出父票，以及是从哪一格读到的。
+ *
+ * 读侧埋点要用这句话说清「结构字段读到了什么」：只记「有父票」分不清是 parentKey 还是 parent_url，
+ * 只记来源也分不清「结构字段是空的、这次按正文认的」与「远端干脆没给父票」。与 deriveParent
+ * 用同一个判断（先 parentKey、再 parent_url 尾段），改这里必须同步改那里，否则日志会跟事实对不上。
+ */
+export function structuralParentFieldOf(raw: unknown): 'parentKey' | 'parentUrl' | 'none' {
+  const bag = asBag(raw)
+  const direct = bag['parentKey']
+  if (typeof direct === 'string' && direct.trim()) return 'parentKey'
+  if (keyFromParentUrl(bag['parent_url'])) return 'parentUrl'
+  return 'none'
+}
+
+/**
  * 父票的来源：远端结构字段，或者票正文里那行兜底文字。
  * 取值不重抄一遍，直接取契约 Issue 上那一格，免得两处各写一份、日后改一处漏一处。
  */

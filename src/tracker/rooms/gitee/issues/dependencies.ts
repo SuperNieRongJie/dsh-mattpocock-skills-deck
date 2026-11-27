@@ -18,7 +18,8 @@ import { TRACKER_ERROR_STAGE } from '../../../contract/results.js'
 import { ERROR_KIND } from '../../../contract/vocabulary.js'
 import { fail } from '../../../kernel/preflight.js'
 import { failGitee } from '../errors.js'
-import { normalizeIssue } from '../model/normalize.js'
+import { normalizeIssue, structuralParentFieldOf } from '../model/normalize.js'
+import { emitBodyFallbackRead } from '../support/read-log.js'
 import { repoRefId } from '../support/repo-ref.js'
 import { fetchIssueRaw, listIssues } from './read.js'
 
@@ -59,6 +60,9 @@ export async function getDependencies(
   opCtx?: GiteeCtx,
 ): Promise<DependenciesResult> {
   const effective = opCtx || ctx
+  const startedAt = Date.now()
+  // 这一趟为了补上清单里缺的票，单票读了几次：读侧轨迹要用它说清「多花的请求换来了什么」。
+  let singleReads = 0
   const refId = repoRefId(repo)
   if (!refId) return failGitee('repo.refId missing', 'getDependencies: repo.refId missing', '')
   const wantedKey = String(key == null ? '' : key).trim()
@@ -90,6 +94,7 @@ export async function getDependencies(
       }
       // 清单里没这张票时再单票读一次：票可能刚好被过滤掉，也可能清单翻页时漏了。
       // 这两条路都走这一趟单票读，不因为「整仓清单列成功了」就当作「这张票没有状态」。
+      singleReads += 1
       const one = await readOne(effective, refId, entry.key)
       if (one) {
         blockedBy.push(refOf(one))
@@ -133,6 +138,18 @@ export async function getDependencies(
       blockingSource: 'scan',
     }
     if (notes.length > 0) data.blockingNote = notes.join('；')
+    // 读侧这一趟的整趟轨迹：结构字段有没有给父票、父票按哪一侧认的、补读了几次、两个方向各自读全没有。
+    emitBodyFallbackRead(
+      effective,
+      'deps',
+      wantedKey,
+      structuralParentFieldOf(raw.bag),
+      issue.parentSource || 'none',
+      (issue.blockedBy || []).length,
+      singleReads,
+      blockedByComplete && blockingComplete,
+      startedAt,
+    )
     return { ok: true, data }
   } catch (err) {
     return failGitee(err, 'getDependencies: 读阻塞关系失败', err, effective)

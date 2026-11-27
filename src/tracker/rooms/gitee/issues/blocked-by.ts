@@ -17,6 +17,7 @@ import type { SetOpts } from '../../../contract/inputs.js'
 import type { OpResult } from '../../../contract/results.js'
 import { TRACKER_ERROR_STAGE } from '../../../contract/results.js'
 import { ERROR_KIND } from '../../../contract/vocabulary.js'
+import { failReason, outcomeOf } from '../../../kernel/log-emit.js'
 import { fail } from '../../../kernel/preflight.js'
 import { GITEE_READ_TIMEOUT_MS } from '../../../../shared/time-config/src/values.js'
 import { failGitee } from '../errors.js'
@@ -24,6 +25,8 @@ import { normalizeIssue } from '../model/normalize.js'
 import { withBlockedBySection } from '../model/blocked-by-section.js'
 import { requestIssueUpdate } from '../requests.js'
 import { repoNameOf, repoRefId } from '../support/repo-ref.js'
+import { emitBlockedByFallback } from '../support/read-log.js'
+import type { BlockedByFallbackTrip } from '../support/read-log.js'
 import { fetchIssueRaw } from './read.js'
 
 type GiteeCtx = Partial<OpContext> & Partial<BackendContext>
@@ -57,13 +60,14 @@ function setDiff(want: string[], got: string[]): { missing: string[]; extra: str
  * 环检沿「被阻塞票的正文小节」往下走：目标票这一跳用本次要写的集合，其余票用它们当前的正文，
  * 所以判的是「写完之后会不会成环」，而不是「现在有没有环」。
  */
-export async function setBlockedBy(
+async function setBlockedByInner(
   ctx: GiteeCtx,
   repo: Repo,
   key: string,
   blockers: string[],
   opts: SetOpts | undefined,
-  opCtx?: GiteeCtx,
+  opCtx: GiteeCtx | undefined,
+  trip: BlockedByFallbackTrip,
 ): Promise<OpResult<Issue>> {
   const effective = opCtx || ctx
   const refId = repoRefId(repo)
@@ -75,6 +79,7 @@ export async function setBlockedBy(
     const one = String(item == null ? '' : item).trim()
     if (one && wanted.indexOf(one) < 0) wanted.push(one)
   }
+  trip.wanted = wanted.length
   // 自阻塞是入参自己打架，还没碰远端就能判：原文里带一份入参快照。
   if (wanted.indexOf(wantedKey) >= 0) {
     return fail(
@@ -105,6 +110,7 @@ export async function setBlockedBy(
     for (const blocker of wanted) {
       const one = await readIssueCached(effective, refId, blocker, cache)
       if (!one.ok) {
+        trip.blockersRead = entries.length
         return failGitee(
           { kind: ERROR_KIND.NETWORK },
           'setBlockedBy: 阻塞票 #' + blocker + ' 读不回来，标题写不进小节，这条关系没有写（来源：正文）',
@@ -113,6 +119,7 @@ export async function setBlockedBy(
         )
       }
       entries.push({ key: blocker, title: one.issue.title })
+      trip.blockersRead = entries.length
     }
 
     // 环检：从目标票出发沿「本次要写的集合 + 各票当前正文」走，走回目标票就是成环。
@@ -130,6 +137,7 @@ export async function setBlockedBy(
       }
       if (visited.has(node)) continue
       visited.add(node)
+      trip.loopNodes = visited.size
       const one = await readIssueCached(effective, refId, node, cache)
       if (!one.ok) {
         // 读不全图就不敢断言没有环：这是「没查清」，不是「查清没有」。
@@ -146,15 +154,22 @@ export async function setBlockedBy(
     const nextBody = withBlockedBySection(target.issue.body, entries)
     // 小节已经与目标一致时不再发请求：重复标记同一张票不该产生第二次正文改动。
     if (nextBody === target.issue.body && setDiff(wanted, keysOf(target.issue)).missing.length === 0) {
+      trip.readBack = 'match'
       return { ok: true, data: target.issue }
     }
     const res = await requestIssueUpdate(effective, refId, wantedKey, { repo: repoNameOf(refId), body: nextBody }, GITEE_READ_TIMEOUT_MS)
+    trip.replyCode = res.code
     // 写动作的自述不是证据：一律以写后读回为准。回包失败但读回对上了，也按成功算（正文确实落盘了）。
     const back = await readIssueCached(effective, refId, wantedKey, new Map())
     if (back.ok) {
       const after = keysOf(back.issue)
       const diff = setDiff(wanted, after)
+      trip.missing = diff.missing.length
+      trip.extra = diff.extra.length
+      trip.readBack = diff.missing.length === 0 && diff.extra.length === 0 ? 'match' : 'mismatch'
       if (diff.missing.length === 0 && diff.extra.length === 0) return { ok: true, data: back.issue }
+    } else {
+      trip.readBack = 'unread'
     }
     // 回包本身失败时先报「写正文失败」：这时读回对不上是失败的结果，不是另一条独立结论。
     if (res.code !== 0) {
@@ -185,6 +200,37 @@ export async function setBlockedBy(
   } catch (err) {
     return failGitee(err, 'setBlockedBy: 写阻塞关系失败', err, effective)
   }
+}
+
+/**
+ * 改阻塞关系的对外入口：内层把这一趟的事实写在 trip 上，这里统一落一行日志再原样返回。
+ *
+ * 为什么要整趟一行、而不是在每个早退分支各记一条：这一趟有六处早退（自阻塞、目标票读不回、
+ * 期望版本不符、阻塞票读不回、环检读不回、写后读回对不上），各记一条会让同一次操作在日志里
+ * 出现好几条，反而看不出「这次到底停在哪一步」。trip 上的计数与枚举就是那一步的证据。
+ */
+export async function setBlockedBy(
+  ctx: GiteeCtx,
+  repo: Repo,
+  key: string,
+  blockers: string[],
+  opts: SetOpts | undefined,
+  opCtx?: GiteeCtx,
+): Promise<OpResult<Issue>> {
+  const startedAt = Date.now()
+  const trip: BlockedByFallbackTrip = {
+    wanted: 0,
+    blockersRead: 0,
+    loopNodes: 0,
+    replyCode: 0,
+    readBack: 'skipped',
+    missing: 0,
+    extra: 0,
+  }
+  const result = await setBlockedByInner(ctx, repo, key, blockers, opts, opCtx, trip)
+  const seen = outcomeOf(result)
+  emitBlockedByFallback(opCtx || ctx, String(key == null ? '' : key).trim(), trip, seen.ok ? 'ok' : failReason(seen.errKind), startedAt)
+  return result
 }
 
 export default { setBlockedBy }
