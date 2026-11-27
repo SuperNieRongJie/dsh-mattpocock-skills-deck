@@ -1,7 +1,7 @@
 {
   "version": 1,
   "purpose": "登记本机既有、与本次改动无关的门禁红。npm run verify:parallel 只把『新红』判失败；这里登记的红照常出现在汇总里，但单独说明原因，不单独把退出码判红。口径见 #3 与 docs/adr/20261026-cancel-ci-verify.md 第 26 行。",
-  "updatedAt": "2026-11-27T14:05:00+08:00",
+  "updatedAt": "2026-11-28T01:09:21+08:00",
   "adjudication": "退出码只看「新红 + 冒烟真红」。已登记红这趟绿了只提示可删除，不判失败（部分红与并发负载有关）。",
   "entries": [
     {
@@ -73,6 +73,20 @@
       "failures": "⑤ 6122ms 越过 r.elapsedMs < 6000 的上限（预算 timeoutMs=2000），kind=timeout",
       "reason": "本机计时边界：全链 8 路并发时进程树清理超过 6 秒；单跑 5740ms 通过。只说明速度，不说明凭据执行失败。",
       "condition": "全链 8 路并发下复现；单跑（12337fe9 基线）5740ms 通过"
+    },
+    {
+      "file": "tests/verify-detail-levels.ts",
+      "ticket": 13,
+      "failures": "存在含子票的 map（TOTAL 2 PASS 1 FAIL 1）",
+      "reason": "本机工作区数据：门禁对真实工作区跑一次 refresh，要求至少一张带子票的顶层容器。2026-11-27 收尾把规格 #7 关闭后，仓库里已没有打开的顶层容器（wayfinder:map 一张也没有；#7 关闭后按薄行回放，不带子票），这条前置数据不再成立。与代码无关：src/ 与该门禁文件在 0810e083..b7757ecb 之间零差异。",
+      "condition": "2026-11-27 在 b7757ecb 上单跑与全链各复现一次；数据在仓库之外，同一数据下基线提交同样红"
+    },
+    {
+      "file": "tests/verify-1586-rewrite.ts",
+      "ticket": 13,
+      "failures": "全链两趟红相不同：第 1 趟 C1 失败 + TypeError: Cannot read properties of undefined (reading 'commitCount') at tests/verify-1586-rewrite.ts:431；第 2 趟 C20 / C23 / C24 失败 + TypeError: ... (reading 'bytes') at tests/verify-1586-rewrite.ts:476",
+      "reason": "负载时序：门禁自建临时 git 仓库做镜像克隆、备份与改写断言，全链并发下与其他门禁抢磁盘与 CPU，每次倒在不同断言上（8 路并发时代的基线上还红过 C16 浅克隆）。单跑（空闲机）353 条断言全绿 EXIT=0；src/ 与该门禁文件在 0810e083..b7757ecb 之间零差异，不是业务回归。时序健壮化由 #14 承接。",
+      "condition": "2026-11-27 在 b7757ecb 上默认 4 路全链两趟各复现一次，红相不同；同提交单跑 EXIT=0"
     }
   ]
 }
