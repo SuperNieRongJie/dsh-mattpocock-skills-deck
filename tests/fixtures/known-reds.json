@@ -1,7 +1,7 @@
 {
   "version": 1,
   "purpose": "登记本机既有、与本次改动无关的门禁红。npm run verify:parallel 只把『新红』判失败；这里登记的红照常出现在汇总里，但单独说明原因，不单独把退出码判红。口径见 #3 与 docs/adr/20261026-cancel-ci-verify.md 第 26 行。",
-  "updatedAt": "2026-11-27T13:40:00+08:00",
+  "updatedAt": "2026-11-27T14:05:00+08:00",
   "adjudication": "退出码只看「新红 + 冒烟真红」。已登记红这趟绿了只提示可删除，不判失败（部分红与并发负载有关）。",
   "entries": [
     {
@@ -10,6 +10,13 @@
       "failures": "B1d / B3b / B4b / B9b / D4 / D6 / D7b，另有 reading 'selector' at tests/verify-1586-stash-page.ts:269",
       "reason": "本机环境：门禁自建临时 git 仓库并断言面板节点，本机读不到 selector；同一提交在干净树上同样红。",
       "condition": "2026-11-27 两次全链（e5d4548d、main）均复现"
+    },
+    {
+      "file": "tests/verify-1586-commit-page.ts",
+      "ticket": 3,
+      "failures": "D 组（本次 D1；此前 E5），门禁执行异常 TypeError: Cannot read properties of undefined (reading 'id') at tests/verify-1586-commit-page.ts:337（commitGroup）",
+      "reason": "本机时序：与 write-contracts 同一类预检票据缺失，commitGroup 拿到的预检结果没有 ticket；同一份代码有时 110 条全过、有时在 D/E 组抛错，与提交页逻辑无关。",
+      "condition": "2026-11-27 单跑两次一绿一红，全链复跑仍红；干净基线 91770db3 上同样红（E5）"
     },
     {
       "file": "tests/verify-1586-write-contracts.ts",
