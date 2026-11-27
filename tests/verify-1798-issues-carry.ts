@@ -15,6 +15,11 @@
  *   · 不把已关闭容器里的已关闭子票（瘦身行）复活成顶层行；
  *   · 补回行仍要过「已挂到地图」过滤，同一张票不能同时出现在 maps[].tickets 与 issues。
  *
+ * 2026-11-27 修订（规格 #7 的 #9 落地）：来源**完整**时缺行不再一律当成「删掉了」。开放列表完整、
+ * 上一份快照里有、这一趟没有的票，按「远端把它关掉了」补成**已关闭**那一行 —— 面板的「已关闭」「全部」
+ * 两档靠它才看得见刚关掉的票。所以本门禁判的是「11 不许再以未关闭身份留下」（liveKeysOf），
+ * 而不是「11 必须整行消失」；补成已关闭行不算拿旧行赖着 —— 它不再算开放票，也接不了手。
+ *
  * 覆盖：
  *   A. 纯组装：补回缺失的顶层行、整行沿用旧值、来源完整照旧删行、无上一份不凭空造行、
  *      同号 PR/issue 各留一行、本次优先、瘦身行不复活、已挂图过滤、升格成容器的行不重复、
@@ -64,6 +69,16 @@ function mapByKey(snap: any, key: string): any {
 }
 function keysOf(list: any[]): string[] {
   return (Array.isArray(list) ? list : []).map(function (x: any) { return x && x.key != null ? String(x.key) : '' }).sort()
+}
+/**
+ * 清单里还以「未关闭」身份留着的票号（#9 之后：缺行可能被补成已关闭行，那不算赖着）。
+ * #1798 要防的是鬼影行 —— 一张票从完整来源里消失以后，仍以开放身份留在清单上；补成已关闭行
+ * 是另一回事：它进的是「已关闭」档，不再算开放票，也不会被当成还能接手的工作。
+ */
+function liveKeysOf(list: any[]): string[] {
+  return (Array.isArray(list) ? list : []).filter(function (r: any) {
+    return String((r && r.state) || '').toUpperCase() !== 'CLOSED'
+  }).map(function (x: any) { return x && x.key != null ? String(x.key) : '' }).sort()
 }
 function issueTitles(snap: any): string[] {
   return (snap && Array.isArray(snap.issues) ? snap.issues : []).map(function (r: any) { return String(r && r.title) }).sort()
@@ -288,11 +303,13 @@ async function main() {
     const c3 = snapMod.createSnapshotComposer(reg)
     const r3 = await c3.composeSnapshot('github', REF, ctx, { force: true })
     check(keysOf(r3.snapshot.issues).join(',') === '10', '反证：不传上一份快照时 11 消失（这正是修复前的现场）', show(keysOf(r3.snapshot.issues)))
-    // 来源恢复完整：同样传上一份快照，11 必须被删掉（只补不删只限不完整来源）。
+    // 来源恢复完整：同样传上一份快照，11 不许再以「未关闭」身份留在清单里（#1798 要防的鬼影行）。
+    //   #9 之后它可能以「已关闭」那一行留下来：开放列表完整时缺行就是「远端把它关掉了」的证据。
     tracker.list = async function () { return { ok: true, data: [row('10')] } }
     const c4 = snapMod.createSnapshotComposer(reg)
     const r4 = await c4.composeSnapshot('github', REF, ctx, { force: true, previousSnapshot: r2.snapshot })
-    check(keysOf(r4.snapshot.issues).join(',') === '10', '来源恢复完整后 11 被删（不拿旧行赖着）', show(keysOf(r4.snapshot.issues)))
+    check(liveKeysOf(r4.snapshot.issues).join(',') === '10', '来源恢复完整后 11 不再以未关闭身份留在清单里（不拿旧行赖着）', show(keysOf(r4.snapshot.issues)))
+    check(!(r4.snapshot.issues || []).some(function (x: any) { return String(x && x.key) === '11' && String(x.state || '').toUpperCase() !== 'CLOSED' }), '11 若还在，只能是已关闭那一行', show(r4.snapshot.issues))
   }
 
   title('C) 快照电话路（wf.snapshot）：截断趟补回顶层行，恢复完整趟删行')
@@ -310,7 +327,7 @@ async function main() {
     // 来源恢复完整，且列表里确实没有 11 —— 这时以本次为准，11 应当被删掉。
     tracker.list = async function () { return { ok: true, data: [row('10')] } }
     const r4 = await h.handleSnapshot({ cwd: 'K1798', force: true })
-    check(keysOf(r4.issues).join(',') === '10', '来源恢复完整后 11 被删（只补不删只限不完整来源）', show(keysOf(r4.issues)))
+    check(liveKeysOf(r4.issues).join(',') === '10', '来源恢复完整后 11 不再以未关闭身份留在清单里（不拿旧行赖着）', show(keysOf(r4.issues)))
   }
 
   title('D) 刷新电话路（wf.refresh）：截断趟补回顶层行，恢复完整趟删行')
@@ -327,7 +344,7 @@ async function main() {
     check(keysOf(r3.issues).join(',') === '10,11', '第三趟整页都没回来：10/11 都从上一份补齐', show(keysOf(r3.issues)))
     tracker.list = async function () { return { ok: true, data: [row('10')] } }
     const r4 = await h.handleRefresh({ cwd: 'K1798' })
-    check(keysOf(r4.issues).join(',') === '10', '来源恢复完整后 11 被删（只补不删只限不完整来源）', show(keysOf(r4.issues)))
+    check(liveKeysOf(r4.issues).join(',') === '10', '来源恢复完整后 11 不再以未关闭身份留在清单里（不拿旧行赖着）', show(keysOf(r4.issues)))
   }
 
   console.log('\n=== 汇总 ===')

@@ -14,6 +14,9 @@
  *   二、纯组装层在来源不完整时，把「上次有、这次缺席」的容器并回 maps，并把已经漏进 issues 的
  *       子票按父键搬回容器（只补不删；完整来源照旧删减）。
  *
+ * 2026-11-27 修订（规格 #7 的 #9 落地）：完整来源下缺的容器不再一律要求整行消失 —— 它可能被补成
+ * 「已关闭」那一行（面板靠它显示刚关掉的地图），但绝不许仍以未关闭身份留在 maps 里，也不再挂旧子票。
+ *
  * 覆盖：
  *   A. 纯组装：截断时容器保留、子票补回、计数不缩水、carry 标记写出；完整来源照旧删除；
  *      已关闭容器按现行口径保留且子票为空；没有上次快照时不凭空造容器。
@@ -325,10 +328,14 @@ async function main() {
     const dec3 = r3.deck && r3.deck.counts
     check(!dec3 && !!r3.deck && !('countsPending' in r3.deck), '第三趟：编排层不写计数、也不留待校准（数字由库算）', show({ counts: dec3, pending: r3.deck && r3.deck.countsPending }))
     check(!!r3.deck && r3.deck.partial === true, '第三趟：仓库级 deck.partial 仍为真', show(r3.deck && r3.deck.partial))
-    // 第四趟：来源恢复完整，且列表里确实没有 2001 —— 这时以本次为准，容器应当被删掉。
+    // 第四趟：来源恢复完整，且列表里确实没有 2001 —— 这时以本次为准，容器 2001 不许再以「未关闭」的
+    //   身份留在 maps 里（那正是 #1774 要防的鬼影行）。#9 之后它可能以「已关闭」那一行留下来：开放列表
+    //   完整时缺行就是「远端把它关掉了」的证据，界面凭状态把它归进已关闭档，不再当开放容器画子票。
     tracker.list = async function () { return { ok: true, data: [childRow('2002', '2001')] } }
     const r4 = await h.handleSnapshot({ cwd: 'K1774', force: true })
-    check(!mapByKey(r4, '2001'), '来源恢复完整后容器 2001 被删（只补不删只限不完整来源）', show(r4 && keysOf(r4.maps)))
+    const m4 = mapByKey(r4, '2001')
+    check(!m4 || String(m4.state || '').toUpperCase() === 'CLOSED', '来源恢复完整后容器 2001 不再以未关闭身份留下（不拿旧行赖着）', show(r4 && keysOf(r4.maps)))
+    check(!m4 || !(Array.isArray(m4.tickets) && m4.tickets.length), '已关闭的容器不再挂着上次的子票', show(m4 && m4.tickets && keysOf(m4.tickets)))
   }
 
   title('D) 刷新电话路（wf.refresh）：第二趟截断、第三趟整棵子树掉出，容器与子票仍保住')
